@@ -185,6 +185,20 @@ Vvveb.ComponentsGroup = {};
 Vvveb.SectionsGroup = {};
 Vvveb.BlocksGroup = {};
 
+//Access control used to limit which elements can be edited based on user level
+Vvveb.Access = {
+    level: 3, //1 - low, 2 - medium, 3 - high
+    basicTags: ["p","span","li","ul","ol","a","b","em","i","strong"],
+    canEditNode: function(node) {
+        if (!node || !node.tagName) return false;
+        if (this.level === 1) {
+            return this.basicTags.indexOf(node.tagName.toLowerCase()) !== -1;
+        }
+        //levels 2 and 3 currently allow all elements
+        return true;
+    }
+};
+
 Vvveb.Components = {
 	
 	_components: {},
@@ -1570,9 +1584,10 @@ Vvveb.Builder = {
 		
 		self.frameBody.addEventListener("mouseup", highlightUp);
 
-		let highlightDbClick = function(event) {
-			
-			if (Vvveb.Builder.isPreview == false) {
+                let highlightDbClick = function(event) {
+
+                        if (Vvveb.Builder.isPreview == false) {
+                                if (!Vvveb.Access.canEditNode(event.target)) return;
 				
 				if (!Vvveb.WysiwygEditor.isActive)  {
 					self.selectPadding = 10;
@@ -1611,13 +1626,20 @@ Vvveb.Builder = {
 		
 		let highlightClick = function(event) {
 			
-			if (Vvveb.Builder.isPreview == false){
-				if (event.target) {
-					if (Vvveb.WysiwygEditor.isActive )  {
-						if (self.texteditEl.contains(event.target)) {
-							return true;
-						}
-					}
+                       if (Vvveb.Builder.isPreview == false){
+                               if (event.target) {
+                                       let canEdit = Vvveb.Access.canEditNode(event.target);
+                                       if (!canEdit) {
+                                               document.getElementById("select-box").style.display = "none";
+                                               document.getElementById("highlight-box").style.display = "none";
+                                               event.preventDefault();
+                                               return false;
+                                       }
+                                       if (Vvveb.WysiwygEditor.isActive )  {
+                                               if (self.texteditEl.contains(event.target)) {
+                                                       return true;
+                                               }
+                                       }
 					//if component properties is loaded in left panel tab instead of right panel show tab
 					let componentTab = document.querySelector(".component-properties-tab a");
 					if (componentTab.offsetParent) { //if properites tab is enabled/visible 
@@ -1626,9 +1648,9 @@ Vvveb.Builder = {
 						bsTab.show(); 
 					}
 					
-					self.selectNode(event.target);
-					Vvveb.TreeList.selectComponent(event.target);
-					self.loadNodeComponent(event.target);
+                                       self.selectNode(event.target);
+                                       Vvveb.TreeList.selectComponent(event.target);
+                                       self.loadNodeComponent(event.target);
 
 					if (Vvveb.component.resizable) {
 						document.getElementById("select-box").classList.add("resizable");
@@ -1637,11 +1659,11 @@ Vvveb.Builder = {
 						document.getElementById("select-box").classList.remove("resizable");
 					}
 					
-					document.getElementById("add-section-box").style.display = "none";
-					event.preventDefault();
-					return false;
-				}	
-			}	
+                                        document.getElementById("add-section-box").style.display = "none";
+                                        event.preventDefault();
+                                        return false;
+                                }
+                        }
 			
 		};
 		
