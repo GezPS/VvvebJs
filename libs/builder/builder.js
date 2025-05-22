@@ -115,15 +115,15 @@ function nestedFormData( a ) {
 		return "";
 	}
 
-	// If an array was passed in, assume that it is an array of form elements.
-	if ( Array.isArray( a ) || ( Object.is( a ) ) ) {
+        // If an array was passed in, assume that it is an array of form elements.
+        if ( Array.isArray( a ) || ( typeof a === "object" ) ) {
 
-		// Serialize the form elements
-		for(const key in object) {
-			let v = object[key];
-		//jQuery.each( a, function() {
-			add( key, v );
-		};
+                // Serialize the form elements
+                for(const key in a) {
+                        let v = a[key];
+                        //jQuery.each( a, function() {
+                        add( key, v );
+                }
 
 	} else {
 
