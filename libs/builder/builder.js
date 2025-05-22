@@ -1332,8 +1332,12 @@ Vvveb.Builder = {
 		
 		let self = Vvveb.Builder;
 		
-		let highlightMove = function(event) {
-			if (self.highlightEnabled == true && event.target && isElement(event.target)) {
+                let highlightMove = function(event) {
+                        if (self.highlightEnabled == true && event.target && isElement(event.target)) {
+                                if (!Vvveb.Access.canEditNode(event.target)) {
+                                        document.getElementById("highlight-box").style.display = "none";
+                                        return;
+                                }
 
 				self.highlightEl = target = event.target;
 				let pos = offset(target);
