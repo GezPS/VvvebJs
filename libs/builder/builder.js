@@ -1639,19 +1639,22 @@ Vvveb.Builder = {
 
 		self.frameBody.addEventListener("dblclick", highlightDbClick);
 
-               let highlightClick = function (event) {
+		let highlightClick = function (event) {
 
-                       if (Vvveb.Builder.isPreview == false) {
-                               if (event.target) {
-                                       let canEdit = Vvveb.Access.canEditNode(event.target);
-                                       if (!canEdit) {
-                                               document.getElementById("highlight-box").style.display = "none";
-                                               return;
-                                       }
-                                       if (Vvveb.WysiwygEditor.isActive) {
-                                               if (self.texteditEl.contains(event.target)) {
-                                                       return true;
-                                               }
+			if (Vvveb.Builder.isPreview == false) {
+				if (event.target) {
+					let canEdit = Vvveb.Access.canEditNode(event.target);
+					if (!canEdit) {
+						document.getElementById("highlight-box").style.display = "none";
+						document.getElementById("select-box").style.display = "none";
+						return;
+					} else {
+						document.getElementById("select-box").style.display = "block";
+					}
+					if (Vvveb.WysiwygEditor.isActive) {
+						if (self.texteditEl.contains(event.target)) {
+							return true;
+						}
 					}
 					//if component properties is loaded in left panel tab instead of right panel show tab
 					let componentTab = document.querySelector(".component-properties-tab a");
