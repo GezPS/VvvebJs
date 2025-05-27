@@ -185,17 +185,78 @@ Vvveb.ComponentsGroup = {};
 Vvveb.SectionsGroup = {};
 Vvveb.BlocksGroup = {};
 
-//Access control used to limit which elements can be edited based on user level
+// Access control used to limit which elements can be edited based on user level
 Vvveb.Access = {
-	level: 1, //1 - low, 2 - medium, 3 - high
-	basicTags: ["p", "li", "ul", "ol", "a", "b", "em", "i", "strong"],
-	canEditNode: function (node) {
-		if (!node || !node.tagName) return false;
-		if (this.level === 1) {
-			return this.basicTags.indexOf(node.tagName.toLowerCase()) !== -1;
+	level: 3, // 1 - basic, 2 - medium, 3 - advanced
+	basicTags: ["p", "span", "li", "ul", "ol", "a", "b", "em", "i", "strong", "h1", "h2", "h3", "h4", "h5", "h6", "button"], // tags which are allowed to be edited
+	mediumTags: ["div", "blockquote", "img"], // tags which are allowed to be edited with level 2 access
+	advancedTags: ["table", "tr", "td", "th", "thead", "tbody", "tfoot", "input", "select", "textarea", "section"], // tags which are allowed to be edited with level 3 access
+	basicBlockedWrapperTags: ["nav", "form", "header", "footer", "article", "aside"], // child elements of these tags are not allowed to be edited with level 1 access
+	mediumBlockedWrapperTags: ["nav", "form", "header"], // child elements of these tags are not allowed to be edited with level 2 access
+	advancedBlockedWrapperTags: ["form"], // child elements of these tags are not allowed to be edited with level 3 access
+	blockedClasses: [], // classes that are not allowed to be edited (this will also block child elements within the class from being edited)
+	allowedTags: function() {
+		let allowedTags = [];
+		switch (this.level) {
+			case 1:
+				allowedTags = this.basicTags;
+				break;
+			case 2:
+				allowedTags = this.basicTags.concat(this.mediumTags);
+				break;
+			case 3:
+				allowedTags = this.basicTags.concat(this.mediumTags, this.advancedTags);
+				break;
+			default:
+				allowedTags = this.basicTags;
+				break;
 		}
-		//levels 2 and 3 currently allow all elements
-		return true;
+		return allowedTags;
+	},
+	blockedWrapperTags: function() {
+		let blockedWrapperTags = [];
+		switch (this.level) {
+			case 1:
+				blockedWrapperTags = this.basicBlockedWrapperTags;
+				break;
+			case 2:
+				blockedWrapperTags = this.mediumBlockedWrapperTags;
+				break;
+			case 3:
+				blockedWrapperTags = this.advancedBlockedWrapperTags;
+				break;
+			default:
+				blockedWrapperTags = this.basicBlockedWrapperTags;
+				break;
+		}
+		return blockedWrapperTags;
+	},
+	canEditNode: function (node) {
+
+		// check if the node is a valid element
+		if (!node || !node.tagName) return false;
+
+		// get the allowed tags and blocked wrapper tags based on user level
+		let allowedTags = this.allowedTags();
+		let blockedWrapperTags = this.blockedWrapperTags();
+
+		// check if the node is inside a blocked wrapper tag
+		for (let i = 0; i < blockedWrapperTags.length; i++) {
+			if (node.closest(blockedWrapperTags[i])) return false;
+		}
+
+		// check if the node is a blocked class
+		for (let i = 0; i < this.blockedClasses.length; i++) {
+
+			// check if the node has a blocked class
+			if (node.classList.contains(this.blockedClasses[i])) return false;
+
+			// check if the node is wrapped in a blocked class
+			if (node.closest('.' + this.blockedClasses[i])) return false;
+		}
+
+		// check if the node is a valid tag based on user level
+		return allowedTags.indexOf(node.tagName.toLowerCase()) !== -1;
 	}
 };
 
@@ -1343,7 +1404,8 @@ Vvveb.Builder = {
 
 		let highlightMove = function (event) {
 			if (self.highlightEnabled == true && event.target && isElement(event.target)) {
-				if (!Vvveb.Access.canEditNode(event.target)) {
+				let canEdit = Vvveb.Access.canEditNode(event.target);
+				if (!canEdit) {
 					document.getElementById("highlight-box").style.display = "none";
 					return;
 				}
@@ -1645,7 +1707,6 @@ Vvveb.Builder = {
 				if (event.target) {
 					let canEdit = Vvveb.Access.canEditNode(event.target);
 					if (!canEdit) {
-						document.getElementById("highlight-box").style.display = "none";
 						document.getElementById("select-box").style.display = "none";
 						return;
 					} else {
