@@ -20,8 +20,8 @@ https://github.com/givanz/VvvebJs
 define('MAX_FILE_LIMIT', 1024 * 1024 * 2);//2 Megabytes max html file size
 define('ALLOW_PHP', false);//check if saved html contains php tag and don't save if not allowed
 define('ALLOWED_OEMBED_DOMAINS', [
-	'https://www.youtube.com/', 
-	'https://www.vimeo.com/', 
+	'https://www.youtube.com/',
+	'https://www.vimeo.com/',
 	'https://www.x.com/',
 	'https://x.com/',
 	'https://publish.twitter.com/',
@@ -36,16 +36,16 @@ function sanitizeFileName($file, $allowedExtension = 'html') {
 		showError('Filename not allowed!');
 		return '';
 	}
-	
+
 	//sanitize, remove double dot .. and remove get parameters if any
 	$file = preg_replace('@\?.*$@' , '', preg_replace('@\.{2,}@' , '', preg_replace('@[^\/\\a-zA-Z0-9\-\._]@', '', $file)));
-	
+
 	if ($file) {
 		$file = __DIR__ . DIRECTORY_SEPARATOR . $file;
 	} else {
 		return '';
 	}
-	
+
 	//allow only .html extension
 	if ($allowedExtension) {
 		$file = preg_replace('/\.[^.]+$/', '', $file) . ".$allowedExtension";
@@ -64,7 +64,7 @@ function validOembedUrl($url) {
 			return true;
 		}
 	}
-	
+
 	return false;
 }
 
@@ -123,9 +123,9 @@ if ($action) {
 			$type = $_POST['type'] ?? false;
 			$name = $_POST['name'] ?? false;
 			$html = $_POST['html'] ?? false;
-			
+
 			if ($type && $name && $html) {
-				
+
 				$file = sanitizeFileName("$type/$name");
 				if ($file) {
 					$dir = dirname($file);
@@ -135,9 +135,9 @@ if ($action) {
 							echo "$dir folder was created\n";
 						} else {
 							showError("Error creating folder '$dir'\n");
-						}				
+						}
 					}
-					
+
 					if (file_put_contents($file, $html)) {
 						echo "File saved '$file'";
 					} else {
@@ -172,6 +172,9 @@ if ($action) {
 } else {
 	//save page
 	if ($html) {
+
+		
+
 		if ($file) {
 			$dir = dirname($file);
 			if (!is_dir($dir)) {
@@ -187,7 +190,7 @@ if ($action) {
 				echo "File saved '$file'";
 			} else {
 				showError("Error saving file '$file'\nPossible causes are missing write permission or incorrect file path!");
-			}	
+			}
 		} else {
 			showError('Filename is empty!');
 		}

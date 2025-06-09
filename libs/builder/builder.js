@@ -194,7 +194,7 @@ Vvveb.Access = {
 	basicBlockedWrapperTags: ["nav", "form", "header", "footer", "article", "aside"], // child elements of these tags are not allowed to be edited with level 1 access
 	mediumBlockedWrapperTags: ["nav", "form", "header"], // child elements of these tags are not allowed to be edited with level 2 access
 	advancedBlockedWrapperTags: ["form"], // child elements of these tags are not allowed to be edited with level 3 access
-	blockedClasses: [], // classes that are not allowed to be edited (this will also block child elements within the class from being edited)
+	blockedClasses: ["st-no-edit", "st-website-block"], // classes that are not allowed to be edited (this will also block child elements within the class from being edited)
 	allowedTags: function() {
 		let allowedTags = [];
 		switch (this.level) {
@@ -248,11 +248,24 @@ Vvveb.Access = {
 		// check if the node is a blocked class
 		for (let i = 0; i < this.blockedClasses.length; i++) {
 
-			// check if the node has a blocked class
-			if (node.classList.contains(this.blockedClasses[i])) return false;
-
-			// check if the node is wrapped in a blocked class
+			// if this class is within a blocked class, ignore it
 			if (node.closest('.' + this.blockedClasses[i])) return false;
+
+			// get the text content for the current node
+			let text = '';
+			node.childNodes.forEach(child => {
+			if (child.nodeType === Node.TEXT_NODE) {
+				text += child.textContent;
+			}
+			});
+			text = text.trim();
+
+			// check this node has text to edit (ignoring child elements)
+			if (text !== "") {
+
+				// check if the node has a blocked class
+				if (node.classList.contains(this.blockedClasses[i])) return false;
+			}
 		}
 
 		// check if the node is a valid tag based on user level
@@ -1405,12 +1418,24 @@ Vvveb.Builder = {
 		let highlightMove = function (event) {
 			if (self.highlightEnabled == true && event.target && isElement(event.target)) {
 				let canEdit = Vvveb.Access.canEditNode(event.target);
+				let node = event.target;
+
+				// if we can't edit this element, keep trying to highlight the parent element
+				let count = 0;
+				if (!canEdit && node.parentElement) {
+					while(!canEdit && node.parentElement && count <= 5) {
+						node = node.parentElement;
+						canEdit = Vvveb.Access.canEditNode(node);
+						count++;
+					}
+				}
+
 				if (!canEdit) {
 					document.getElementById("highlight-box").style.display = "none";
 					return;
 				}
 
-				self.highlightEl = target = event.target;
+				self.highlightEl = target = node;
 				let pos = offset(target);
 				let height = target.offsetHeight;
 				let halfHeight = Math.max(height / 2, 5);
@@ -1418,8 +1443,8 @@ Vvveb.Builder = {
 				let halfWidth = Math.max(width / 2, 5);
 				let prepend = true;
 
-				let x = event.x;
-				let y = event.y;
+				let x = node.x;
+				let y = node.y;
 
 				if (self.isResize) {
 					if (!self.initialPosition) {
@@ -1570,7 +1595,7 @@ Vvveb.Builder = {
 				{
 					//if text editor is open check if the highlighted element is not inside the editor
 					if (Vvveb.WysiwygEditor.isActive) {
-						if (self.texteditEl.contains(event.target)) {
+						if (self.texteditEl.contains(node)) {
 							return true;
 						}
 					}
@@ -1580,7 +1605,7 @@ Vvveb.Builder = {
 						 left:${pos.left - (self.frameDoc.scrollLeft ?? 0)}px;
 						 width:${width}px;
 						 height:${height}px;
-						 display:${event.target.hasAttribute('contenteditable') ? "none" : "block"};
+						 display:${node.hasAttribute('contenteditable') ? "none" : "block"};
 						 border:${self.isDragging ? "1px dashed #0d6efd" : ""};
 					`);
 
@@ -1590,7 +1615,7 @@ Vvveb.Builder = {
 						document.getElementById("section-actions").classList.remove("outside");
 					}
 
-					let elementType = self._getElementType(event.target);
+					let elementType = self._getElementType(node);
 					document.querySelector("#highlight-name .type").innerHTML = elementType[0];
 					document.querySelector("#highlight-name .name").innerHTML = elementType[1];
 				}
@@ -1664,7 +1689,7 @@ Vvveb.Builder = {
 		let highlightDbClick = function (event) {
 
 			if (Vvveb.Builder.isPreview == false) {
-				if (!Vvveb.Access.canEditNode(event.target)) return;
+				if(!Vvveb.Access.canEditNode(event.target)) return;
 
 				if (!Vvveb.WysiwygEditor.isActive) {
 					self.selectPadding = 10;
@@ -1706,6 +1731,17 @@ Vvveb.Builder = {
 			if (Vvveb.Builder.isPreview == false) {
 				if (event.target) {
 					let canEdit = Vvveb.Access.canEditNode(event.target);
+					let node = event.target;
+
+					// if we can't edit this element, keep trying to highlight the parent element
+					let count = 0;
+					if (!canEdit && node.parentElement) {
+						while(!canEdit && node.parentElement && count <= 5) {
+							node = node.parentElement;
+							canEdit = Vvveb.Access.canEditNode(node);
+							count++;
+						}
+					}
 					if (!canEdit) {
 						document.getElementById("select-box").style.display = "none";
 						return;
@@ -1713,7 +1749,7 @@ Vvveb.Builder = {
 						document.getElementById("select-box").style.display = "block";
 					}
 					if (Vvveb.WysiwygEditor.isActive) {
-						if (self.texteditEl.contains(event.target)) {
+						if (self.texteditEl.contains(node)) {
 							return true;
 						}
 					}
@@ -1725,10 +1761,10 @@ Vvveb.Builder = {
 						bsTab.show();
 					}
 
-					self.selectNode(event.target);
-					Vvveb.TreeList.selectComponent(event.target);
+					self.selectNode(node);
+					Vvveb.TreeList.selectComponent(node);
 					if (canEdit) {
-						self.loadNodeComponent(event.target);
+						self.loadNodeComponent(node);
 					}
 
 					if (Vvveb.component.resizable) {
