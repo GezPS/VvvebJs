@@ -1,46 +1,12 @@
 Vvveb.ComponentsGroup['Custom'] =
 [];
 
-ajaxCall("getComponents").then((components) => {
-	console.debug('Components received:', components);
+stAjaxCall("getComponents").then((components) => {
 	processComponents(components);
 
 	// we need to reload the control groups
 	Vvveb.Builder.loadControlGroups();
 });
-
-function ajaxCall(a, d = {}) {
-
-	// get the current page url
-	var url = new URL(window.location.href);
-
-	// get the i parameter from the url
-	var i = url.searchParams.get('i');
-
-	// get the root url
-	url = url.origin + '/';
-
-	// run the ajax call
-	return new Promise((resolve, reject) => {
-		$.ajax({
-			url: url + 'process/vvveb.php',
-			type: 'GET',
-			data: {
-				i: i,
-				a: a,
-				d: JSON.stringify(d)
-			},
-			success: function(response) {
-				console.debug('Ajax call successful:', a, response);
-				resolve(JSON.parse(response));
-			},
-			error: function() {
-				console.error('Ajax call failed:', a);
-				reject();
-			}
-		});
-	});
-}
 
 function processComponents(components) {
 
@@ -114,6 +80,7 @@ function registerComponent(component) {
 		onChange: function (node, property, value) {
 			componentOnChange(component, node, property, value);
 		},
+		custom: true
 	});
 }
 
@@ -129,7 +96,7 @@ function componentInit(component, node) {
 	if(blockId != "") {
 
 		// get the block data
-		ajaxCall("getWebsiteBlockSettings", {id: blockId}).then((response) => {
+		stAjaxCall("getWebsiteBlockSettings", {id: blockId}).then((response) => {
 
 			// check the response for values
 			if (response && response.values) {
@@ -200,7 +167,7 @@ function componentOnChange(component, node, property, value) {
 		});
 
 		// create or update the block
-		ajaxCall("createWebsiteBlock", propertyValues).then((response) => {
+		stAjaxCall("createWebsiteBlock", propertyValues).then((response) => {
 
 			// check the response for an id
 			if (response && response.id) {

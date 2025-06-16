@@ -1761,19 +1761,13 @@
 					<div class="modal-body text">
 						<div class="mb-3 row" data-key="type">
 							<label class="col-sm-3 col-form-label">
-								Template
-								<abbr
-									title="The contents of this template will be used as a start for the new template">
-									<i class="la la-lg la-question-circle text-primary"></i>
-								</abbr>
-
+								Page Type
 							</label>
 							<div class="col-sm-9 input">
 								<div>
-									<select class="form-select" name="startTemplateUrl">
-										<option value="new-page-blank-template.html">Blank Template</option>
-										<option value="demo/narrow-jumbotron/index.html">Narrow jumbotron</option>
-										<option value="demo/album/index.html">Album</option>
+									<select class="form-select" name="type">
+										<option value="page">Page</option>
+										<option value="blog">Blog</option>
 									</select>
 								</div>
 							</div>
@@ -1789,7 +1783,26 @@
 							</div>
 						</div>
 
-						<div class="mb-3 row" data-key="href">
+						<div class="mb-3 row" data-key="type">
+							<label class="col-sm-3 col-form-label">
+								Template
+								<abbr
+									title="The contents of this template will be used as a start for the new template">
+									<i class="la la-lg la-question-circle text-primary"></i>
+								</abbr>
+
+							</label>
+							<div class="col-sm-9 input">
+								<div>
+									<select class="form-select" name="startTemplateUrl">
+										<option value="blank">Blank Page Template</option>
+										<option value="blank">Blank Blog Template</option>
+									</select>
+								</div>
+							</div>
+						</div>
+
+						<!-- <div class="mb-3 row" data-key="href">
 							<label class="col-sm-3 col-form-label">File name</label>
 							<div class="col-sm-9 input">
 								<div>
@@ -1797,7 +1810,7 @@
 										placeholder="my-page.html" required>
 								</div>
 							</div>
-						</div>
+						</div> -->
 
 						<!--
 		<div class="mb-3 row" data-key="href">
@@ -1810,7 +1823,7 @@
 		</div>
 		-->
 
-						<div class="mb-3 row" data-key="href">
+						<!-- <div class="mb-3 row" data-key="href">
 							<label class="col-sm-3 col-form-label">Save to folder</label>
 							<div class="col-sm-9 input">
 								<div>
@@ -1818,7 +1831,7 @@
 										placeholder="/" required>
 								</div>
 							</div>
-						</div>
+						</div> -->
 					</div>
 
 					<div class="modal-footer">
@@ -1866,6 +1879,8 @@
 
 	<!-- builder code-->
 	<script src="libs/builder/builder.js"></script>
+	<script src="libs/custom/custom-scripts.js"></script>
+
 	<!-- undo manager-->
 	<script src="libs/builder/undo.js"></script>
 	<!-- inputs-->
@@ -2388,25 +2403,47 @@ Unzip the latest ckeditor release zip from https://github.com/ckeditor/ckeditor4
 			"product": { name: "product", title: "Product", url: "demo/product/index.html", file: "demo/product/index.html", folder: "ecommerce" }
 		};
 
+		let pages = {};
 
-		let pages = defaultPages;
+		// get the pages
+		if(typeof stAjaxCall === 'function') {
+			stAjaxCall('getPages', {}, 'GET').then(async (response) => {
 
-		let firstPage = Object.keys(pages)[0];
-		Vvveb.Builder.init(pages[firstPage]["url"], function () {
-			//load code after page is loaded here
-		});
+				// build the pages object from the response
+				if(response && response.length) {
+					response.forEach(function (page) {
+						if (page.title && page.url && page.id) {
+							pages[page.title] = {
+								id: page.id,
+								name: page.title,
+								file: page.url,
+								title: page.title,
+								url: page.url,
+								folder: page.type + "s" || null,
+								description: page.description || ''
+							};
+						}
+					});
+				}
 
-		Vvveb.Gui.init();
-		Vvveb.FileManager.init();
-		Vvveb.SectionList.init();
-		Vvveb.TreeList.init();
-		Vvveb.Breadcrumb.init();
-		Vvveb.CssEditor.init();
+				let firstPage = Object.keys(pages)[0];
+				Vvveb.Builder.init(pages[firstPage]["url"], function () {
+					//load code after page is loaded here
+				});
 
-		Vvveb.FileManager.addPages(pages);
-		Vvveb.FileManager.loadPage(pages[firstPage]["name"]);
-		Vvveb.Gui.toggleRightColumn(false);
-		Vvveb.Breadcrumb.init();
+				Vvveb.Gui.init();
+				Vvveb.FileManager.init();
+				Vvveb.SectionList.init();
+				Vvveb.TreeList.init();
+				Vvveb.Breadcrumb.init();
+				Vvveb.CssEditor.init();
+
+				Vvveb.FileManager.addPages(pages);
+				Vvveb.FileManager.loadPage(pages[firstPage]["name"]);
+				Vvveb.Gui.toggleRightColumn(false);
+				Vvveb.Breadcrumb.init();
+					});
+				}
 	</script>
 </body>
 

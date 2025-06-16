@@ -1644,6 +1644,24 @@ Vvveb.Builder = {
 					}
 
 					if (self.component.afterDrop) self.dragElement = self.component.afterDrop(self.dragElement);
+
+					if(!self.component.custom
+						|| !self.component.custom !== true
+					) {
+						let wrapper = document.createElement('div');
+						wrapper.classList.add("st-vvveb-block");
+						var type = self.component.type || "component";
+
+						// remove any spaces of slashes
+						type = type.replace(/\s/g, '-').replace(/\//g, '-');
+						type = type.toLowerCase();
+
+						wrapper.classList.add("st-vvveb-" + type);
+						self.dragElement.parentNode.insertBefore(wrapper, self.dragElement);
+						wrapper.appendChild(self.dragElement);
+						self.dragElement = wrapper;
+					}
+
 				} else {
 					self.selectedEl.classList.remove("is-dragged");
 					self.dragElement.replaceWith(self.selectedEl);
@@ -2008,6 +2026,23 @@ Vvveb.Builder = {
 				node = component.afterDrop(node);
 			}
 
+			if(!component.custom
+				|| !component.custom !== true
+			) {
+				let wrapper = document.createElement('div');
+				wrapper.classList.add("st-vvveb-block");
+				var type = component.type || "component";
+
+				// remove any spaces of slashes
+				type = type.replace(/\s/g, '-').replace(/\//g, '-');
+				type = type.toLowerCase();
+
+				wrapper.classList.add("st-vvveb-" + type);
+				node.parentNode.insertBefore(wrapper, node);
+				wrapper.appendChild(node);
+				node = wrapper;
+			}
+
 			self.selectNode(node);
 			self.loadNodeComponent(node);
 			Vvveb.TreeList.loadComponents();
@@ -2323,41 +2358,75 @@ Vvveb.Builder = {
 		*/
 	},
 
-	saveAjax: function (data, saveUrl, callback, error) {
+	saveAjax: async function (data, saveUrl, callback, error) {
 		if (!data["file"]) {
 			data["file"] = Vvveb.FileManager.getCurrentFileName();
 		}
 
+		if(!data["id"]) {
+			data["id"] = Vvveb.FileManager.getPageId();
+		}
+
+		var action = 'createPage';
 		if (!data["startTemplateUrl"]) {
 			data["html"] = this.getHtml();
+			action = 'updatePage';
+		}
+
+		// this means we're creating a new page
+		if(typeof stAjaxCall === 'function') {
+			stAjaxCall(action, data, 'POST').then(async (response) => {
+
+				// check the response for some html
+				data["startTemplateUrl"] = "";
+				if (response && response.html) {
+					data["html"] = response.html;
+				}
+
+				// create the html page
+				return fetch(saveUrl, {
+					method: "POST",
+					headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
+					body: nestedFormData(data)
+				})
+					.then((response) => {
+						if (!response.ok) { return Promise.reject(response); }
+						return response.text();
+					})
+					.then((data) => {
+						if (callback) callback(data);
+						Vvveb.Undo.reset();
+						document.querySelectorAll("#top-panel .save-btn").forEach(e => e.setAttribute("disabled", "true"));
+					})
+					.catch((err) => {
+						if (error) error(err);
+						let message = error?.statusText ?? "Error saving!";
+						displayToast("bg-danger", "Error", message);
+
+						if (err.hasOwnProperty('text')) err.text().then(errorMessage => {
+							let message = errorMessage.substr(0, 200);
+							displayToast("bg-danger", "Error", message);
+						});
+					});
+			}).catch((err) => {
+				if (error) error(err);
+				let message = err?.statusText ?? "Error saving!";
+				displayToast("bg-danger", "Error", message);
+
+				if(err) {
+					if (err.hasOwnProperty('text')) err.text().then(errorMessage => {
+						let message = errorMessage.substr(0, 200);
+						displayToast("bg-danger", "Error", message);
+					});
+				} else {
+					displayToast("bg-danger", "Error", "Something went wrong!");
+				}
+			});
+		} else {
+			displayToast("bg-danger", "Error", "Something went wrong!");
 		}
 
 		//data['elements'] = new URLSearchParams(data['elements']);
-
-		return fetch(saveUrl, {
-			method: "POST",
-			headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
-			body: nestedFormData(data)
-		})
-			.then((response) => {
-				if (!response.ok) { return Promise.reject(response); }
-				return response.text();
-			})
-			.then((data) => {
-				if (callback) callback(data);
-				Vvveb.Undo.reset();
-				document.querySelectorAll("#top-panel .save-btn").forEach(e => e.setAttribute("disabled", "true"));
-			})
-			.catch((err) => {
-				if (error) error(err);
-				let message = error?.statusText ?? "Error saving!";
-				displayToast("bg-danger", "Error", message);
-
-				if (err.hasOwnProperty('text')) err.text().then(errorMessage => {
-					let message = errorMessage.substr(0, 200);
-					displayToast("bg-danger", "Error", message);
-				});
-			});
 	},
 
 	setDesignerMode: function (designerMode = false) {
@@ -2724,18 +2793,27 @@ Vvveb.Gui = {
 				if (el.offsetParent || el.name == 'image') data[el.name] = el.value;
 			});
 
+			if(data['title']) {
+				data['file'] = data['title'].replace(/\s+/g, '-').toLowerCase() + ".html";
+			}
+
 			if (data['file']) {
-				data['title'] = data['file'].replace('/', '').replace('.html', '');
-				//let name = data['name'] = data['folder'].replace('/', '_') + "-" + data['title'];
+				// data['title'] = data['file'].replace('/', '').replace('.html', '');
+				// let name = data['name'] = data['folder'].replace('/', '_') + "-" + data['title'];
 				if (!data['name']) {
 					data['name'] = data['title'];
 				}
+				// data['url'] = data['file'] = data['folder'] + "/" + data['file'];
+				// data['url']  = Vvveb.themeBaseUrl + data['url'];
+			}
+
+			if(data['type']) {
+				data['folder'] = data['type'] + "s";
 				data['url'] = data['file'] = data['folder'] + "/" + data['file'];
-				//data['url']  = Vvveb.themeBaseUrl + data['url'];
 			}
 
 			e.preventDefault();
-
+			// return;
 			return Vvveb.Builder.saveAjax(data, this.action, function (savedData) {
 				data.title = data.name;
 
@@ -3894,6 +3972,11 @@ Vvveb.FileManager = {
 		}
 
 		let page = generateElements(tmpl("vvveb-filemanager-page", data))[0];
+
+		if(data.id) {
+			page.setAttribute("data-id", data.id);
+		}
+
 		if (afterPage && (afterPage = folder.querySelector('[data-page="' + afterPage + '"]'))) {
 			afterPage.after(page);
 		} else {
@@ -3939,6 +4022,11 @@ Vvveb.FileManager = {
 		}
 	},
 
+	getPageId: function () {
+		if (this.currentPage) {
+			return this.pages[this.currentPage]['id'] ?? this.pages[this.currentPage]['file'];
+		}
+	},
 
 	getCurrentFileName: function () {
 		if (this.currentPage) {
