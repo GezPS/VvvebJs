@@ -2396,6 +2396,9 @@ Vvveb.Builder = {
 					.then((data) => {
 						if (callback) callback(data);
 						Vvveb.Undo.reset();
+
+						// reload the html
+						Vvveb.FileManager.reloadCurrentPage();
 						document.querySelectorAll("#top-panel .save-btn").forEach(e => e.setAttribute("disabled", "true"));
 					})
 					.catch((err) => {

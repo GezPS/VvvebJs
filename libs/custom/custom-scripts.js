@@ -6,8 +6,9 @@ function stAjaxCall(a, d = {}, t = 'GET') {
 	// get the current page url
 	var url = new URL(window.location.href);
 
-	// get the i parameter from the url
+	// get the i & w parameters from the url
 	var i = url.searchParams.get('i');
+	var w = url.searchParams.get('w');
 
 	// get the root url
 	url = url.origin + '/';
@@ -19,6 +20,7 @@ function stAjaxCall(a, d = {}, t = 'GET') {
 			type: t,
 			data: {
 				i: i,
+				w: w,
 				a: a,
 				d: JSON.stringify(d)
 			},
