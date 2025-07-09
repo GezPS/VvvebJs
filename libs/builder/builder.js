@@ -193,8 +193,8 @@ Vvveb.Access = {
 	advancedTags: ["table", "tr", "td", "th", "thead", "tbody", "tfoot", "input", "select", "textarea", "section"], // tags which are allowed to be edited with level 3 access
 	basicBlockedWrapperTags: ["nav", "form", "header", "footer", "article", "aside"], // child elements of these tags are not allowed to be edited with level 1 access
 	mediumBlockedWrapperTags: ["nav", "form", "header"], // child elements of these tags are not allowed to be edited with level 2 access
-	advancedBlockedWrapperTags: ["form"], // child elements of these tags are not allowed to be edited with level 3 access
-	blockedClasses: ["st-no-edit", "st-website-block"], // classes that are not allowed to be edited (this will also block child elements within the class from being edited)
+	advancedBlockedWrapperTags: ["form", "st-website-block"], // child elements of these tags are not allowed to be edited with level 3 access
+	blockedClasses: ["st-no-edit"], // classes that are not allowed to be edited (this will also block child elements within the class from being edited)
 	allowedTags: function() {
 		let allowedTags = [];
 		switch (this.level) {
@@ -243,6 +243,7 @@ Vvveb.Access = {
 		// check if the node is inside a blocked wrapper tag
 		for (let i = 0; i < blockedWrapperTags.length; i++) {
 			if (node.closest(blockedWrapperTags[i])) return false;
+			if (node.closest('.' + blockedWrapperTags[i]) && !node.classList.contains(blockedWrapperTags[i])) return false;
 		}
 
 		// check if the node is a blocked class
@@ -1107,15 +1108,59 @@ Vvveb.Builder = {
 		document.getElementById("select-box").style.display = "none";
 
 		self.initCallback = callback;
-		if (Vvveb.Builder.iframe.src != url) Vvveb.Builder.iframe.src = url;
+
+		// get the html for this page
+		var action = 'getHtml';
+		var data = {};
+		data["url"] = url;
+
+		if(typeof stAjaxCall === 'function') {
+			stAjaxCall(action, data, 'POST').then(async (response) => {
+				if(response && response.html) {
+					let html = response.html;
+					if (html) {
+
+						// set any css or js that should be loaded in the iframe
+						self.iframe.onload = () => {
+							const doc = self.iframe.contentDocument;
+							const head = doc.head;
+							const body = doc.body;
+
+							if (response.css) {
+								const style = doc.createElement('style');
+								style.classList.add('st-ignore');
+								style.textContent = response.css;
+								head.appendChild(style);
+							}
+
+							if (response.js) {
+								const script = doc.createElement('script');
+								script.classList.add('st-ignore');
+								script.textContent = response.js;
+								body.appendChild(script)
+							}
+
+							if(response.editor_css) {
+								Vvveb.StyleManager.setCss(response.editor_css);
+							}
+						};
+
+						// load the HTML into the iframe
+						self.iframe.setAttribute('srcdoc', html);
+
+					} else {
+						displayToast("bg-danger", "Error", "Error loading page: " + response.message);
+					}
+				}
+			});
+		}
+		// if (Vvveb.Builder.iframe.src != url) Vvveb.Builder.iframe.src = url;
 	},
 
 	/* iframe */
 	_loadIframe: function (url) {
-
 		let self = this;
 		self.iframe = this.documentFrame;
-		self.iframe.src = url;
 
 		return this.documentFrame.addEventListener("load", function () {
 			window.FrameWindow = self.iframe.contentWindow;
@@ -1423,7 +1468,7 @@ Vvveb.Builder = {
 				// if we can't edit this element, keep trying to highlight the parent element
 				let count = 0;
 				if (!canEdit && node.parentElement) {
-					while(!canEdit && node.parentElement && count <= 5) {
+					while(!canEdit && node.parentElement && count <= 10) {
 						node = node.parentElement;
 						canEdit = Vvveb.Access.canEditNode(node);
 						count++;
@@ -2797,7 +2842,7 @@ Vvveb.Gui = {
 			});
 
 			if(data['title']) {
-				data['file'] = data['title'].replace(/\s+/g, '-').toLowerCase() + ".html";
+				data['file'] = data['title'].replace(/\s+/g, '-').toLowerCase();
 			}
 
 			if (data['file']) {
@@ -2811,7 +2856,12 @@ Vvveb.Gui = {
 			}
 
 			if(data['type']) {
-				data['folder'] = data['type'] + "s";
+				// data['folder'] = data['type'] + "s";
+				data['folder'] = data['folder'].replace(/'/g, '')
+					.replace(/'/g, '')
+					.replace(/[^0-9a-z/]+/gi, '-')
+					.trim()
+					.toLowerCase();
 				data['url'] = data['file'] = data['folder'] + "/" + data['file'];
 			}
 

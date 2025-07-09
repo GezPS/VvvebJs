@@ -111,11 +111,12 @@ if ($action) {
 		break;
 		case 'delete':
 			if ($file) {
-				if (unlink($file)) {
-					echo "File '$file' deleted";
-				} else {
-					showError("Error deleting file '$file'");
-				}
+				// if (unlink($file)) {
+				// 	echo "File '$file' deleted";
+				// } else {
+				// 	showError("Error deleting file '$file'");
+				// }
+				showError("Deleting files is currently disabled!");
 			}
 		break;
 		case 'saveReusable':
@@ -173,8 +174,6 @@ if ($action) {
 	//save page
 	if ($html) {
 
-		
-
 		if ($file) {
 			$dir = dirname($file);
 			if (!is_dir($dir)) {
@@ -186,11 +185,11 @@ if ($action) {
 				}
 			}
 
-			if (file_put_contents($file, $html)) {
-				echo "File saved '$file'";
-			} else {
-				showError("Error saving file '$file'\nPossible causes are missing write permission or incorrect file path!");
-			}
+			// if (file_put_contents($file, $html)) {
+				echo "Page saved successfully!";
+			// } else {
+				// showError("Error saving file '$file'\nPossible causes are missing write permission or incorrect file path!");
+			// }
 		} else {
 			showError('Filename is empty!');
 		}

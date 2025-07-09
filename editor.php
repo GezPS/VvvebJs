@@ -5,24 +5,24 @@ $html = file_get_contents('editor.html');
 //search for html files in demo and my-pages folders
 //$htmlFiles = glob('{my-pages/*.html,demo/*\/*.html, demo/*.html}',  GLOB_BRACE);
 // $htmlFiles = array_merge(glob('my-pages/*.html'),glob('demo/*\/*.html'), glob('demo/*.html'));
-$htmlFiles = glob('pages/*.html');
-$htmlFiles = array_merge($htmlFiles, glob('blogs/*.html'));
-$files = '';
-foreach ($htmlFiles as $file) {
-   if (in_array($file, array('new-page-blank-template.html', 'editor.html'))) continue;//skip template files
-   $pathInfo = pathinfo($file);
-   $filename = $pathInfo['filename'];
-   $folder = preg_replace('@/.+?$@', '', $pathInfo['dirname']);
-   $subfolder = preg_replace('@^.+?/@', '', $pathInfo['dirname']);
-   if ($filename == 'index' && $subfolder) {
-	   $filename = $subfolder;
-   }
-   $url = $pathInfo['dirname'] . '/' . $pathInfo['basename'];
-   $name = $filename;
-   $title = ucfirst($name);
+// $htmlFiles = glob('pages/*.html');
+// $htmlFiles = array_merge($htmlFiles, glob('blogs/*.html'));
+// $files = '';
+// foreach ($htmlFiles as $file) {
+//    if (in_array($file, array('new-page-blank-template.html', 'editor.html'))) continue;//skip template files
+//    $pathInfo = pathinfo($file);
+//    $filename = $pathInfo['filename'];
+//    $folder = preg_replace('@/.+?$@', '', $pathInfo['dirname']);
+//    $subfolder = preg_replace('@^.+?/@', '', $pathInfo['dirname']);
+//    if ($filename == 'index' && $subfolder) {
+// 	   $filename = $subfolder;
+//    }
+//    $url = $pathInfo['dirname'] . '/' . $pathInfo['basename'];
+//    $name = $filename;
+//    $title = ucfirst($name);
 
-  $files .= "{name:'$name', file:'$file', title:'$title',  url: '$url', folder:'$folder'},";
-}
+//   $files .= "{name:'$name', file:'$file', title:'$title',  url: '$url', folder:'$folder'},";
+// }
 
 
 //replace files list from html with the dynamic list from demo folder

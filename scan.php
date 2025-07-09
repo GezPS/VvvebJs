@@ -25,13 +25,16 @@ function sanitizePath($path) {
 	return $path;
 }
 
-if (isset($_POST['mediaPath']) && ($path = sanitizePath(substr($_POST['mediaPath'], 0, 256)))) {
+if (isset($_POST['mediaPath'])
+	&& ($path = sanitizePath(substr($_POST['mediaPath'], 0, 256)))
+) {
+	$path = $_POST['mediaPath'];
 	define('UPLOAD_PATH', $path);
 } else {
 	define('UPLOAD_PATH', 'media');
 }
 
-$scandir = __DIR__ . DIRECTORY_SEPARATOR. UPLOAD_PATH;
+$scandir = UPLOAD_PATH;
 
 // Run the recursive function
 // This function scans the files folder recursively, and builds a large array
@@ -83,4 +86,6 @@ echo json_encode([
 	'type'  => 'folder',
 	'path'  => '',
 	'items' => $response,
+	'mediaLink'  => $mediaLink,
+	'uploadPath' => UPLOAD_PATH,
 ]);

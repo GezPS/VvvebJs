@@ -19,7 +19,7 @@ https://github.com/givanz/VvvebJs
 
 /*
 This script is used by image upload input to save the image on the server and return the image url to be set as image src attribute.
-*/ 
+*/
 
 $uploadDenyExtensions  = ['php'];
 $uploadAllowExtensions = ['ico','jpg','jpeg','png','gif','webp','svg'];
@@ -33,10 +33,10 @@ function sanitizeFileName($file)
 {
 	$disallow = ['.htaccess', 'passwd'];
 	$file = str_replace($disallow, '', $file);
-	
+
 	//sanitize, remove double dot .. and remove get parameters if any
 	$file = preg_replace('@\?.*$@' , '', preg_replace('@\.{2,}@' , '', preg_replace('@[^\/\\a-zA-Z0-9\-\._]@', '', $file)));
-	
+
 	return $file;
 }
 
@@ -65,7 +65,7 @@ if (!in_array($extension, $uploadAllowExtensions)) {
 	showError("File type $extension not allowed!");
 }
 
-$destination = UPLOAD_FOLDER . UPLOAD_PATH . DIRECTORY_SEPARATOR . $fileName;
+$destination = UPLOAD_PATH . DIRECTORY_SEPARATOR . $fileName;
 move_uploaded_file($_FILES['file']['tmp_name'], $destination);
 
 if (isset($_POST['onlyFilename'])) {

@@ -179,41 +179,57 @@ function componentOnChange(component, node, property, value) {
 				if(response.block) {
 
 					var html = response.block.html || "";
+					var js = response.block.JS || "";
+					var css = response.block.CSS || "";
 					if(html != "") {
 
 						// update the node's HTML
 						$(node).html(html);
 
-						// remove any classes from the node which are not in the component
-						component.classes.forEach((className) => {
-							if(!$(node).hasClass(className)) {
-								$(node).addClass(className);
-							}
-						});
-						var classes = node.classList;
-						for (var i = 0; i < classes.length; i++) {
-							if (!component.classes.includes(classes[i]) && classes[i] !== 'st-website-block') {
-								$(node).removeClass(classes[i]);
-							}
-						}
+						// move the st-website-block element outside of the node
+						var stWebsiteBlock = $(node).children('.st-website-block').first();
+						if(stWebsiteBlock.length > 0) {
 
-						// update any other blocks with the same id
-						component.classes.forEach((className) => {
-							var elements = $(node).closest('html').find('.' + className + '[data-id="' + response.id + '"]');
-							if(elements.length == 0) {
-								console.debug('No elements found for class:', className, 'and data-id:', response.id);
-							} else {
-								elements.each(function() {
-									console.debug($(this));
-									if(this !== node
-										&& this.parentElement !== node
+							// check if the node has a parent
+							if(node.parentElement) {
+
+								// move the st-website-block element to the parent
+								$(node.parentElement).append(stWebsiteBlock);
+
+								// add the classes from the node to the st-website-block element
+								for (const className of $(node).attr('class').split(' ')) {
+									if(className
+										&& className !== 'st-website-block'
+										&& className !== 'st-no-edit'
+										&& className !== 'st-vvveb-temp'
+										&& className !== 'st-vvveb-block-'
 									) {
-										$(this).attr('data-id', response.id);
-										$(this).html(html);
+										stWebsiteBlock.addClass(className);
 									}
-								});
+								}
+							} else {
+								console.warn('Node has no parent, cannot move st-website-block element');
 							}
-						});
+
+							// check for js
+							if(js != "") {
+
+								// create a script element
+								var script = `<script type="text/javascript" class="st-ignore">${js}</script>`;
+								$(node).after(script);
+							}
+
+							// check for css
+							if(css != "") {
+
+								// create a style element
+								var style = `<style type="text/css" class="st-ignore">${css}</style>`;
+								$(node).after(style);
+							}
+
+							// remove the node
+							$(node).remove();
+						}
 					}
 				}
 			} else {

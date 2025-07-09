@@ -1823,15 +1823,15 @@
 		</div>
 		-->
 
-						<!-- <div class="mb-3 row" data-key="href">
+						<div class="mb-3 row" data-key="href">
 							<label class="col-sm-3 col-form-label">Save to folder</label>
 							<div class="col-sm-9 input">
 								<div>
-									<input name="folder" type="text" value="my-pages" class="form-control"
+									<input name="folder" type="text" value="" class="form-control"
 										placeholder="/" required>
 								</div>
 							</div>
-						</div> -->
+						</div>
 					</div>
 
 					<div class="modal-footer">
@@ -2412,6 +2412,15 @@ Unzip the latest ckeditor release zip from https://github.com/ckeditor/ckeditor4
 				// build the pages object from the response
 				if(response && response.length) {
 					response.forEach(function (page) {
+						if(
+							(page.url == undefined
+								|| page.url == null
+								|| page.url == ''
+							)
+							&& page.title == "Home"
+						) {
+							page.url = "/";
+						}
 						if (page.title && page.url && page.id) {
 							pages[page.title] = {
 								id: page.id,
@@ -2419,7 +2428,7 @@ Unzip the latest ckeditor release zip from https://github.com/ckeditor/ckeditor4
 								file: page.url,
 								title: page.title,
 								url: page.url,
-								folder: page.type + "s" || null,
+								folder: page.folder || null,
 								description: page.description || ''
 							};
 						}

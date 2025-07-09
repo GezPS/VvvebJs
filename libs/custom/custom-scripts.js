@@ -46,3 +46,18 @@ function stAjaxCall(a, d = {}, t = 'GET') {
 		});
 	});
 }
+
+var mediaPath = "/media/";
+var docinc = "";
+var doclink = window.location.href;
+var mediaScanUrl = "scan.php";
+var uploadUrl = "upload.php";
+stAjaxCall('getFilePath', [], 'GET').then(async (response) => {
+	if(response.docinc) {
+		docinc = response.docinc;
+		mediaPath = docinc.replace(/^.*?\/public\//, '../../');
+		if(response.doclink) {
+			doclink = response.doclink;
+		}
+	}
+});

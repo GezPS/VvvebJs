@@ -15,45 +15,45 @@ class MediaModal {
 	{
 		this.isInit = false;
 		this.isModal = modal;
-		
-		this.modalHtml = 
+
+		this.modalHtml =
 		`
 		<div class="modal fade modal-full" id="MediaModal" tabindex="-1" role="dialog" aria-labelledby="MediaModalLabel" aria-hidden="true">
 		  <div class="modal-dialog modal-xl modal-dialog-scrollable" role="document">
 			<div class="modal-content">
 			  <div class="modal-header">
 				<h5 class="modal-title fw-normal" id="MediaModalLabel">Media</h5>
-                
+
 				<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close">
 				  <!-- <span aria-hidden="true"><i class="la la-times la-lg"></i></span> -->
 				</button>
 			  </div>
 			  <div class="modal-body">
-	
+
                       <div class="filemanager">
 
 						<div class="top-right d-flex justify-content-between">
-                             
-							<div class="">          
+
+							<div class="">
 								<div class="breadcrumbs"></div>
 							</div>
-                                       
-                                   
-							<div class="">                   
+
+
+							<div class="">
 								<div class="search">
 									<input type="search" id="media-search-input" placeholder="Find a file.." />
 								</div>
-								
-								<button class="btn btn-outline-secondary btn-sm btn-icon me-5 float-end" 
-								   data-bs-toggle="collapse" 
-								   data-bs-target=".upload-collapse" 
-								   aria-expanded="false" 
+
+								<button class="btn btn-outline-secondary btn-sm btn-icon me-5 float-end"
+								   data-bs-toggle="collapse"
+								   data-bs-target=".upload-collapse"
+								   aria-expanded="false"
 								   >
 								   <i class="la la-upload la-lg"></i>
 									Upload file
 								</button>
 							</div>
-							
+
 						</div>
 
 						<div class="top-panel">
@@ -63,21 +63,21 @@ class MediaModal {
 								<button id="upload-close" type="button" class="btn btn-sm btn-light" aria-label="Close" data-bs-toggle="collapse" data-bs-target=".upload-collapse" aria-expanded="true">
 								   <span aria-hidden="true"><i class="la la-times la-lg"></i></span>
 								</button>
-								
+
 							   <h3>Drop or choose files to upload</h3>
-							   
-							   <input type="file" multiple class=""> 
-								
+
+							   <input type="file" multiple class="">
+
 								<div class="status"></div>
 							</div>
 
 
 						</div>
-						
+
 						<div class="display-panel">
-							
+
 							<ul class="data" id="media-files"></ul>
-						
+
 							<div class="nothingfound">
 								<div class="nofiles">
 									<i class="la la-folder-open"></i>
@@ -86,7 +86,7 @@ class MediaModal {
 								<div class="mt-4">
 									<button class="btn btn-outline-secondary btn-sm btn-icon" data-bs-toggle="collapse" data-bs-target=".upload-collapse" aria-expanded="false">
 									<i class="la la-upload la-lg"></i>
-									Upload file 
+									Upload file
 									</button>
 								</div>
 							</div>
@@ -95,11 +95,11 @@ class MediaModal {
 
 			  </div>
 			  <div class="modal-footer justify-content-between">
-			  
+
 				<div class="align-left">
-			
+
 				</div>
-			  
+
 				<div class="align-right">
 					<button type="button" class="btn btn-secondary btn-icon me-1" data-bs-dismiss="modal">
 						<i class="la la-times"></i>
@@ -114,7 +114,7 @@ class MediaModal {
 			</div>
 		  </div>
 		</div>`;
-		
+
 		this.response = [],
 		this.currentPath = '';
 		this.breadcrumbsUrls = [];
@@ -122,10 +122,11 @@ class MediaModal {
 		this.breadcrumbs = null;
 		this.fileList = null;
 		this.mediaPath = mediaPath;
+		this.doclink = doclink ?? window.location.href;
 		this.type = "single";
 		this.container = document.getElementById("MediaModal");
 	}
-	
+
 	getResponse(response) {
 		return this.response;
 	}
@@ -135,13 +136,13 @@ class MediaModal {
 		this.currentPath = '',
 		this.breadcrumbsUrls = [];
 	}
-	
+
 	addModalHtml() {
 		if (this.isModal) document.body.append(generateElements(this.modalHtml)[0]);
 		this.container = document.getElementById("MediaModal");
 		this.container.querySelector(".save-btn").addEventListener("click", () => this.save());
 	}
-	
+
 	showUploadLoading() {
 		this.container.querySelector(".upload-collapse .status").innerHTML = `
 		<div class="spinner-border" style="width: 5rem; height: 5rem;margin: 5rem auto; display:block" role="status">
@@ -152,12 +153,12 @@ class MediaModal {
 	hideUploadLoading() {
 		this.container.querySelector(".upload-collapse .status").innerHTML = '';
 	}
-	
+
 	save() {
-		
+
 		let file = this.container.querySelector(".files input:checked").value ?? false;
 		let src = file;
-		
+
 		if (!file) return;
 
 		if (file.indexOf("//") == -1) {
@@ -167,7 +168,7 @@ class MediaModal {
 		if (this.targetThumb) {
 			document.querySelector(this.targetThumb).setAttribute("src", src);
 		}
-		
+
 		if (this.callback) {
 			this.callback(src);
 		}
@@ -183,7 +184,7 @@ class MediaModal {
 		let modal = bootstrap.Modal.getOrCreateInstance(this.container);
 		if (this.isModal) modal.hide();
 	}
-	
+
 	init() {
 		if (!this.isInit) {
 			if (this.isModal) this.addModalHtml();
@@ -206,10 +207,10 @@ class MediaModal {
 			});
 
 			const event = new CustomEvent( "mediaModal:init", {detail: { type:this.type, targetInput:this.targetInput, targetThumb:this.targetThumb, callback:this.callback} });
-			window.dispatchEvent(event);			
+			window.dispatchEvent(event);
 		}
 	}
-	
+
 	open(element, callback) {
 		if (element instanceof Element) {
 			this.targetInput = element.dataset.targetInput;
@@ -224,7 +225,7 @@ class MediaModal {
 				this.type = element.type;
 			}
 		}
-		
+
 		this.callback = callback;
 		this.init();
 
@@ -241,7 +242,13 @@ class MediaModal {
 
 		// Start by fetching the file data from scan.php with an AJAX request
 		if (!this.response.length) {//if response set by a plugin ignore fetch
-			fetch(mediaScanUrl)
+			fetch(mediaScanUrl, {
+				method: "POST",
+				body: new URLSearchParams({
+					mediaPath: this.mediaPath,
+					mediaLink: this.mediaLink,
+				})
+			})
 			.then((response) => {
 				if (!response.ok) { throw new Error(response) }
 				return response.json();
@@ -253,7 +260,7 @@ class MediaModal {
 
 				let folders = [],
 					files = [];
-					
+
 				window.dispatchEvent(new HashChangeEvent("hashchange"));
 			})
 			.catch(error => {
@@ -270,7 +277,7 @@ class MediaModal {
 
 			_this.goto(window.location.hash);
 
-			// We are triggering the event. This will execute 
+			// We are triggering the event. This will execute
 			// this function on page load, so that we show the correct folder:
 
 		});
@@ -317,7 +324,7 @@ class MediaModal {
 			}
 
 		});
-		
+
 		search.addEventListener('keyup', function(e) {
 
 			// Clicking 'ESC' button triggers focusout and cancels the search
@@ -331,7 +338,7 @@ class MediaModal {
 			}
 
 		});
-		
+
 		search.addEventListener("focusout", function(e) {
 
 			// Cancel the search
@@ -497,7 +504,7 @@ _
 			let folders = [];
 			let files = [];
 
-			let _searchData = function (data, searchTerms) { 
+			let _searchData = function (data, searchTerms) {
 			data.forEach(function(d){
 				if(d.type === 'folder') {
 
@@ -514,9 +521,9 @@ _
 				}
 			});
 			};
-			
+
 			_searchData(data, searchTerms);
-			
+
 			return {folders: folders, files: files};
 		}
 
@@ -533,14 +540,14 @@ _
 			}
 
 			function imageIsLoaded(e) {
-					
+
 					let image = e.target.result;
-					
+
 					let formData = new FormData();
 					formData.append("file", file);
-					formData.append("mediaPath", Vvveb.MediaModal.mediaPath + Vvveb.MediaModal.currentPath);
+					formData.append("mediaPath", docinc + Vvveb.MediaModal.currentPath);
 					formData.append("onlyFilename", true);
-		
+
 					fetch(uploadUrl, {method: "POST",  body: formData})
 					.then((response) => {
 						if (!response.ok) {
@@ -552,38 +559,78 @@ _
 						return response.text()
 					})
 					.then((data) => {
+						let path = doclink;
+						let file_name = data;
+
+						// remove any trailing slashes
+						if(path.endsWith("/")) {
+							path = path.slice(0, -1);
+						}
+
+						// append the current directory path
+						if(Vvveb.MediaModal.currentPath != "") {
+							path += Vvveb.MediaModal.currentPath;
+						}
+
+						// remove any trailing slashes
+						if(path.endsWith("/")) {
+							path = path.slice(0, -1);
+						}
+
+						// append the file name
+						path += "/" + file_name;
+
+						// remove the doclink from the path, this is added back when the html is generated
+						path = path.replace(doclink, "");
+
+						// build the element
 						let fileElement = Vvveb.MediaModal.addFile({
-							name:data,
-							type:"file",
-							path: Vvveb.MediaModal.currentPath + "/" + data,
-							size:1
+							name: data,
+							type: "file",
+							path: path,
+							size: 1
 						},true);
-						
+
 						fileElement.scrollIntoView({behavior: "smooth", block: "center", inline: "center"});
-						
-						Vvveb.MediaModal.hideUploadLoading();				
+
+						Vvveb.MediaModal.hideUploadLoading();
+
+						if(typeof stAjaxCall === "function") {
+
+							var document_data = {
+								file_name: file_name,
+								file_path: path
+							}
+
+							// run the ajax call
+							stAjaxCall("documentUploaded", document_data).then((response) => {
+
+							}).catch((err) => {
+								console.debug('Promise rejected:', err);
+							});
+						}
 					})
 					.catch((error) => {
 						let [response, responseInText] = error;
 						let message = responseInText ?? error.statusText ?? "Error uploading!";
-						Vvveb.MediaModal.hideUploadLoading();						
+						Vvveb.MediaModal.hideUploadLoading();
 						displayToast("bg-danger", "Error", message.substr(0, 200));
 						if (response.text && !response.bodyUsed) {
 							response.text().then( errorMessage => {
 								let message = errorMessage.substr(0, 200);
 								console.log(message);
 								displayToast("bg-danger", "Error", message);
-							});			
-						}			
-					});		
+							});
+						}
+					});
 			}
-		}	
-	
+		}
+
 		deleteFile(el) {
 			let parent = el.closest("li");
 			let file = parent.querySelector('input[type ="hidden"]').value;
 			if (confirm(`Are you sure you want to delete "${file}"template?`)) {
-				
+
 			fetch(deleteUrl, {method: "POST",  body: new URLSearchParams({file})})
 				.then((response) => {
 					if (!response.ok) {  return Promise.reject(response);  }
@@ -591,14 +638,14 @@ _
 				})
 				.then((data) => {
 					let bg = "bg-success";
-					if (data.success) {		
+					if (data.success) {
 					} else {
 						//bg = "bg-danger";
 					}
 
 					displayToast(bg, "Delete", data.message ?? data);
-				
-					parent.remove();	
+
+					parent.remove();
 				})
 				.catch(error => {
 					console.log(error);
@@ -607,8 +654,8 @@ _
 					error.text().then( errorMessage => {
 						let message = errorMessage.substr(0, 200);
 						displayToast("bg-danger", "Error", message);
-					})	
-				});	
+					})
+				});
 			}
 		}
 
@@ -626,59 +673,59 @@ _
 				})
 				.then((data) => {
 					let bg = "bg-success";
-					if (data.success) {		
+					if (data.success) {
 					} else {
 						//bg = "bg-danger";
 					}
-					
+
 					displayToast(bg, "Save", data.message ?? data);
 				})
 				.catch(error => {
 					console.log(error);
 					displayToast("bg-danger", "Error", "Error renaming file!");
-				});	
+				});
 			}
 		}
-		
+
 		addFile(f, selected) {
 				let _this= this;
 				let isImage = false;
 				let actions = '';
-				
+
 				let fileSize = _this.bytesToSize(f.size),
 						name = _this.escapeHTML(f.name),
 						fileType = name.split('.'),
 						icon = '<span class="icon file"></span>';
 
 					fileType = fileType[fileType.length-1];
-					
+
 					if (fileType == "jpg" || fileType == "jpeg" || fileType == "png" || fileType == "gif" || fileType == "svg" || fileType == "webp") {
-						
+
 						//icon = '<div class="image" style="background-image: url(' + _this.mediaPath + f.path + ');"></div>';
-						icon = '<img class="image" loading="lazy" src="' + _this.mediaPath + f.path + '">';
+						icon = '<img class="image" loading="lazy" src="' + _this.doclink + f.path + '">';
 						isImage = true;
 					} else {
 						icon = '<span class="icon file f-'+fileType+'">.'+fileType+'</span>';
 					}
 					//icon = '<span class="icon file f-'+fileType+'">.'+fileType+'</span>';
 
-				
-				
+
+
 				actions += '<a href="javascript:void(0);" title="Rename" class="btn btn-outline-primary btn-sm border-0 btn-rename"><i class="la la-edit"></i></a> <a href="javascript:void(0);" title="Delete" class="btn btn-outline-danger btn-sm border-0 btn-delete"><i class="la la-trash"></i></a>';
 
 				const event = new CustomEvent("mediaModal:fileActions", {detail: { file: _this.mediaPath + f.path, name, fileType, fileSize, isImage, fileType, actions} });
-				window.dispatchEvent(event);			
+				window.dispatchEvent(event);
 
 				if (isImage) actions += '<a href="javascript:void(0);" class="preview-link p-2"><i class="la la-search-plus"></i></a>';
-				
+
 				let file = generateElements('<li class="files">\
 						<label class="form-check">\
-						<input type="hidden" value="' +  _this.mediaPath + f.path + '" name="filename[]">\
-						  <input type="' + ((_this.type == "single") ? "radio" : "checkbox") + '" class="form-check-input" value="' + f.path + '" name="file[]" ' + ((selected == "single") ? "checked" : "") + '><span class="form-check-label"></span>\
+						<input type="hidden" value="' +  _this.doclink + f.path + '" name="filename[]">\
+						  <input type="' + ((_this.type == "single") ? "radio" : "checkbox") + '" class="form-check-input" value="' + _this.doclink + f.path + '" name="file[]" ' + ((selected == "single") ? "checked" : "") + '><span class="form-check-label"></span>\
 						  <div href="#\" class="files">'+icon+'<div class="info"><div class="name">'+ name +'</div><span class="details">'+fileSize+'</span>\
 							' + actions + '\
 							 <div class="preview">\
-								<img src="' + _this.mediaPath + f.path + '">\
+								<img src="' + _this.doclink + f.path + '">\
 								<div>\
 									<span class="name">'+ name +'</span><span class="details">'+fileSize+'</span>\
 								</div>\
@@ -686,17 +733,17 @@ _
 						  </div>\
 						</label>\
 					</li>')[0];
-				
+
 				_this.fileList.append(file);
 
 				if (selected) {
 					file.querySelector("input[type ='radio'], input[type='checkbox']").checked = true;
 				}
-				
+
 				return file;
 		}
 
-		
+
 		render(data) {
 
 			let scannedFolders = [],
@@ -735,7 +782,7 @@ _
 			}
 
 			let _this = this;
-			
+
 			if(scannedFolders.length) {
 
 				scannedFolders.forEach(function(f) {
@@ -769,7 +816,7 @@ _
 				scannedFiles.forEach(function(f) {
 
 					_this.addFile(f);
-					
+
 				});
 
 			}
@@ -807,7 +854,7 @@ _
 			this.breadcrumbs.replaceChildren();
 			this.breadcrumbs.appendChild(generateElements('<a href="/"><i class="la la-home"></i><span class="folderName">&ensp;home</span></a>')[0]);
 			this.breadcrumbs.appendChild(generateElements('<span>' + url + '</span>')[0]);
-			
+
 			// Show the generated elements
 
 			this.fileList.animate({'display':'inline-block'});
@@ -829,7 +876,7 @@ _
 			if (bytes == 0) return '0 Bytes';
 			let i = parseInt(Math.floor(Math.log(bytes) / Math.log(1024)));
 			return Math.round(bytes / Math.pow(1024, i), 2) + ' ' + sizes[i];
-		}	
+		}
 }
 /*
 export {
