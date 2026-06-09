@@ -27966,3 +27966,54 @@ audio {
 	margin-right: 4px;
 	box-shadow: rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(255, 255, 255, 0.2) 0px 0.75px 0px 0px inset, rgba(var(--bs-secondary-rgb), 0.4) 0px 1px 2px 0px, rgba(var(--bs-secondary-rgb), 0.8) 0px 0px 0px 1px !important;
 }
+
+/* Container holds the arrows and the wrapper horizontally */
+.tab-slider-container {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    position: relative;
+}
+
+/* The wrapper hides the overflow and enables smooth JS scrolling */
+.tab-slider-wrapper {
+    flex-grow: 1;
+    overflow: hidden;
+    scroll-behavior: smooth;
+}
+
+/* Prevent Bootstrap tabs from wrapping to the next line */
+.tab-slider-wrapper .nav-tabs {
+    flex-wrap: nowrap;
+    border-bottom: none; /* Move border to container to avoid gaps */
+}
+
+/* Force exactly 3 items per page (100% / 3 = 33.333%) */
+.tab-slider-wrapper .nav-item {
+    flex: 0 0 33.3333% !important;
+    text-align: center;
+	height: 81px;
+}
+
+/* Style the arrow buttons */
+.slider-btn {
+    background: transparent;
+    border: none;
+    color: var(--bs-link-color);
+    font-size: 1.5rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2;
+}
+
+.slider-btn:hover {
+    color: #0a58ca;
+}
+
+/* Optional: hide arrows when disabled via JS */
+.slider-btn:disabled {
+    color: #ccc;
+    cursor: not-allowed;
+}

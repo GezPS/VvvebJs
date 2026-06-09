@@ -2535,16 +2535,22 @@ Vvveb.Builder = {
 	},
 
 	saveAjax: async function (data, saveUrl, callback, error) {
+
+		// set the page name
 		if (!data["file"]) {
 			data["file"] = Vvveb.FileManager.getCurrentFileName();
 		}
 
+		// set the page id
 		if(!data["id"]) {
 			data["id"] = Vvveb.FileManager.getPageId();
 		}
 
+		// set the default action
 		var action = 'createPage';
-		if (!data["template"]) {
+
+		// if the data doesn't include a template, we are updating a page
+		if (data["template"] === undefined) {
 			data["html"] = this.getHtml();
 			action = 'updatePage';
 		}
@@ -2963,7 +2969,7 @@ Vvveb.Gui = {
 
 			let data = {};
 			this.querySelectorAll("input[type=text],input[type=checkbox]:checked,input[type=radio]:checked,input[name=image], select:not(:disabled)").forEach((el, i) => {
-				if (el.offsetParent || el.name == 'image') data[el.name] = el.value;
+				if (el.offsetParent || el.name == 'image' || el.name == 'folder' || el.name == 'url' || el.name == 'template') data[el.name] = el.value;
 			});
 
 			if(data['title']) {
@@ -3006,6 +3012,16 @@ Vvveb.Gui = {
 				Vvveb.FileManager.loadPage(data.name);
 				Vvveb.FileManager.scrollToPage(page);
 				bsModal.hide();
+
+				// reload the page list
+				// get the currently selected page type from the file manager tabs
+				const selectedType = $('#filemanager-tabs .nav-link.active').data('type') || 'page';
+
+				// reload the pages
+				stGetPages(selectedType);
+
+				// rebuild the page folders
+				stBuildPageFolders();
 			});
 		};
 

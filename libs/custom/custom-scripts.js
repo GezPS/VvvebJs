@@ -3,6 +3,9 @@ $(document).ready(function () {
 	// build the page folders on load
 	stBuildPageFolders();
 
+	// build the file manager nav items
+	stBuildNavItems();
+
 	var folder_select = $('select.st-parent-folder-select');
 	folder_select.on('mousedown', function() {
 
@@ -26,40 +29,16 @@ $(document).ready(function () {
 
 	if($('#new-page-modal').length) {
 		$('#new-page-modal').on('shown.bs.modal', function () {
-
-			// check if custom templates have already been loaded
 			if(!$(this).data('templates-loaded')) {
+				loadTemplates();
+			}
+		});
+	}
 
-				// get the custom templates
-				stAjaxCall('getTemplates', {}, 'GET').then(async (response) => {
-					if(response && response.templates) {
-						const templates = response.templates;
-						let templateSelect = $('#new-page-modal select[name="template"]');
-
-						// create the optgroup element if we have templates
-						if(Object.keys(templates).length) {
-							var optgroup = $('<optgroup></optgroup>')
-								.attr('label', 'Custom Templates');
-							templateSelect.append(optgroup);
-							templateSelect = optgroup;
-						}
-
-						Object.keys(templates).forEach(function(id) {
-							const template = templates[id];
-
-							// build the option element
-							var option = $('<option></option>')
-								.attr('value', template.id)
-								.text(template.title);
-
-							// add the option to the select element
-							templateSelect.append(option);
-						});
-
-						// mark templates as loaded
-						$('#new-page-modal').data('templates-loaded', true);
-					}
-				});
+	if($('#st-new-folder-modal').length) {
+		$('#st-new-folder-modal').on('shown.bs.modal', function () {
+			if(!$(this).data('templates-loaded')) {
+				loadTemplates();
 			}
 		});
 	}
@@ -72,16 +51,24 @@ $(document).ready(function () {
 
 		// get the template details
 		var templateName = $(this).find('input[name="title"]').val();
+		var folder = $(this).find('select[name="folder"]').val();
 
 		// make the ajax call to create the template
 		stAjaxCall('createTemplate', {
 			name: templateName,
+			folder: folder,
 			html: html
 		}, 'POST', true).then(async (response) => {
 			if(response && response.success) {
 
 				// close the modal
 				$('#st-new-template-modal').modal('hide');
+
+				// reload the templates
+				stGetPages('template');
+
+				// rebuild the page folders
+				stBuildPageFolders();
 
 				// show success message
 				displayToast("bg-success", "Success", "Template created successfully.");
@@ -106,8 +93,11 @@ $(document).ready(function () {
 				// close the modal
 				$('#st-new-folder-modal').modal('hide');
 
+				// get the currently selected page type from the file manager tabs
+				const selectedType = $('#filemanager-tabs .nav-link.active').data('type') || 'page';
+
 				// reload the pages
-				stGetPages();
+				stGetPages(selectedType);
 
 				// rebuild the page folders
 				stBuildPageFolders();
@@ -186,19 +176,65 @@ $(document).ready(function () {
 			case 'blog':
 				$('#new-page-modal .st-parent-folder-select').closest('.mb-3').hide();
 				$('#new-page-modal .st-parent-folder-select').val('');
+				$('#new-page-modal input[name="url"]').closest('.row').show();
 				stUpdatePageLinkPreview();
-				changeFieldLabel($('#new-page-modal input[name="title"]').closest('.row').find('label'), $('#new-page-modal input[name="title"]'), 'Blog Name', 'My Blog');
+				changeFieldLabel(
+					$('#new-page-modal input[name="title"]').closest('.row').find('label'),
+					$('#new-page-modal input[name="title"]'),
+					'Blog Name',
+					'My Blog'
+				);
 				$('#new-page-modal form .btn[type="submit"]').html('<i class="la la-check"></i> Create Blog');
-				changeFieldLabel($('#new-page-modal input[name="url"]').closest('.row').find('label'), $('#new-page-modal input[name="url"]'), 'Blog Link', 'my-blog');
+				changeFieldLabel(
+					$('#new-page-modal input[name="url"]').closest('.row').find('label'),
+					$('#new-page-modal input[name="url"]'),
+					'Blog Link',
+					'my-blog'
+				);
 				break;
 			case 'page':
 				$('#new-page-modal .st-parent-folder-select').closest('.mb-3').show();
+				$('#new-page-modal input[name="url"]').closest('.row').show();
 				stUpdatePageLinkPreview();
-				changeFieldLabel($('#new-page-modal input[name="title"]').closest('.row').find('label'), $('#new-page-modal input[name="title"]'), 'Page Name', 'My Page');
+				changeFieldLabel(
+					$('#new-page-modal input[name="title"]').closest('.row').find('label'),
+					$('#new-page-modal input[name="title"]'),
+					'Page Name',
+					'My Page'
+				);
 				$('#new-page-modal form .btn[type="submit"]').html('<i class="la la-check"></i> Create Page');
-				changeFieldLabel($('#new-page-modal input[name="url"]').closest('.row').find('label'), $('#new-page-modal input[name="url"]'), 'Page Link', 'my-page');
+				changeFieldLabel(
+					$('#new-page-modal input[name="url"]').closest('.row').find('label'),
+					$('#new-page-modal input[name="url"]'),
+					'Page Link',
+					'my-page'
+				);
 				break;
-
+			case 'template':
+				$('#new-page-modal .st-parent-folder-select').closest('.mb-3').show();
+				$('#new-page-modal input[name="url"]').closest('.row').hide();
+				stUpdatePageLinkPreview();
+				changeFieldLabel(
+					$('#new-page-modal input[name="title"]').closest('.row').find('label'),
+					$('#new-page-modal input[name="title"]'),
+					'Template Name',
+					'My Template'
+				);
+				$('#new-page-modal form .btn[type="submit"]').html('<i class="la la-check"></i> Create Template');
+				break;
+			case 'menu':
+				$('#new-page-modal .st-parent-folder-select').closest('.mb-3').hide().val('');
+				$('#new-page-modal input[name="url"]').closest('.row').hide().val('');
+				$('#new-page-modal input[name="template"]').closest('.mb-3').hide().val('');
+				stUpdatePageLinkPreview();
+				changeFieldLabel(
+					$('#new-page-modal input[name="title"]').closest('.row').find('label'),
+					$('#new-page-modal input[name="title"]'),
+					'Menu Name',
+					'Main Menu'
+				);
+				$('#new-page-modal form .btn[type="submit"]').html('<i class="la la-check"></i> Create Menu');
+				break;
 		}
 
 		function changeFieldLabel(label, field, name, placeholder = "") {
@@ -236,9 +272,193 @@ $(document).ready(function () {
 		var target = $(this).data('type');
 		if(target) {
 			stGetPages(target);
+
+			// set the #new-page-modal select[name="type"] value to match the selected tab
+			$('#new-page-modal select[name="type"]').val(target).trigger('change');
 		}
 	});
 });
+
+function stBuildNavItems() {
+	const $container = $('.tab-slider-container');
+	if($container.length) {
+		const $slider = $container.find('#tabSlider');
+		const $slideLeft = $container.find('#slideLeft');
+		const $slideRight = $container.find('#slideRight');
+
+		function updateArrowStates() {
+			const scrollLeft = $slider.scrollLeft();
+			const maxScroll = $slider[0].scrollWidth - $slider.innerWidth();
+
+			// Disable left arrow if at the start
+			$slideLeft.prop('disabled', scrollLeft <= 0);
+
+			// Disable right arrow if at the end (using a 1px buffer for rounding issues)
+			$slideRight.prop('disabled', scrollLeft >= maxScroll - 1);
+		}
+
+		// Initial check
+		updateArrowStates();
+
+		// Check states whenever the user scrolls
+		$slider.on('scroll', updateArrowStates);
+
+		$slideLeft.on('click', function() {
+			$slider.scrollLeft($slider.scrollLeft() - $slider.innerWidth());
+		});
+
+		$slideRight.on('click', function() {
+			$slider.scrollLeft($slider.scrollLeft() + $slider.innerWidth());
+		});
+	}
+}
+
+function loadTemplates() {
+
+    // get the custom templates
+    stAjaxCall('getTemplates', {}, 'GET').then(async (response) => {
+        if(response && response.templates) {
+
+            // merge templates and folders into the treeselect format
+            var treeselectData = formatTemplatesForTreeselect(response.folders || {}, response.templates);
+
+            // get the template container
+            let templateContainers = $('.st-template-container');
+
+            templateContainers.each(function() {
+                let containerDiv = this; // Raw DOM element
+                let $container = $(this); // jQuery object
+
+                // only load the templates if we haven't already
+                if(!$container.data('templates-loaded')) {
+
+                    // clear container in case of re-render
+                    containerDiv.innerHTML = '';
+
+                    // initialise treeselect
+                    let domEl = new Treeselect({
+                        parentHtmlContainer: containerDiv,
+                        value: null,
+                        options: treeselectData,
+                        isSingleSelect: true,
+                        placeholder: 'Select a template',
+                        searchable: true,
+						disabledBranchNodes: true,
+						inputCallback: (selectedValue) => {
+
+							// check if the selected item is a folder
+							if (selectedValue && String(selectedValue).startsWith('folder_')) {
+
+							    // clear the treeselect field so it doesn't stay selected
+							    domEl.updateValue(null);
+
+							    // clear the hidden input to be safe
+							    $container.parent().find('.st-template-input').val('');
+							    return;
+							}
+
+							// update the hidden input for form submission
+							$container.parent().find('.st-template-select').val(selectedValue);
+							console.log('User selected template ID:', selectedValue);
+						}
+                    });
+
+                    // mark templates as loaded
+                    $container.data('templates-loaded', true);
+
+                    // add the same attribute to the nearest modal, if there is one
+                    var nearestModal = $container.closest('.modal');
+                    if(nearestModal.length) {
+                        nearestModal.data('templates-loaded', true);
+                    }
+                }
+            });
+        }
+    });
+}
+
+/**
+ * Creates the Treeselect options
+ */
+function formatTemplatesForTreeselect(folders, templates) {
+    var folderToTemplates = {};
+    var rootTemplates = [];
+
+    // group templates by their parent folder ID
+    if (templates) {
+        Object.keys(templates).forEach(function(key) {
+            var tpl = templates[key];
+
+            // if it belongs to a folder, push to that folder's array
+            if (tpl.folder && tpl.folder !== "") {
+                if (!folderToTemplates[tpl.folder]) {
+                    folderToTemplates[tpl.folder] = [];
+                }
+                folderToTemplates[tpl.folder].push(tpl);
+            } else {
+
+                // otherwise, it sits at the root
+                rootTemplates.push(tpl);
+            }
+        });
+    }
+
+    // recursive function to build the folder tree templates
+    function buildFolderTree(folderObject) {
+        if (!folderObject || Object.keys(folderObject).length === 0) {
+            return [];
+        }
+        return Object.keys(folderObject).map(function(key) {
+            var folder = folderObject[key];
+            var node = {
+                name: folder.name,
+                value: 'folder_' + folder.id,
+				isGroupSelectable: false
+            };
+
+            var children = [];
+
+            // add child folders recursively
+            if (folder.children && Object.keys(folder.children).length > 0) {
+                children = children.concat(buildFolderTree(folder.children));
+            }
+
+            // add templates that belong to this specific folder
+            if (folderToTemplates[folder.id]) {
+                var templateNodes = folderToTemplates[folder.id].map(function(t) {
+                    return {
+                        name: t.title,
+                        value: t.id
+                    };
+                });
+                children = children.concat(templateNodes);
+            }
+
+            // if the folder has either child folders or templates, attach them
+            if (children.length > 0) {
+                node.children = children;
+            }
+
+            return node;
+        });
+    }
+
+    // build the final tree structure
+    var finalTree = [];
+
+    // add all the structured folders
+    if (folders) {
+        finalTree = finalTree.concat(buildFolderTree(folders));
+    }
+
+    // add root level templates at the very bottom
+    var rootTemplateNodes = rootTemplates.map(function(t) {
+        return { name: t.title, value: t.id };
+    });
+    finalTree = finalTree.concat(rootTemplateNodes);
+
+    return finalTree;
+}
 
 function searchPages(searchTerm, list, index = 1) {
     let found = false;
@@ -347,61 +567,98 @@ function stBuildPageLink(title) {
 
 function stBuildPageFolders() {
 
-	// get a list of available page folders
-	stAjaxCall('getPageFolders', {}, 'GET').then(async (response) => {
-		if(response) {
-			var folderSelect = $('.st-parent-folder-select');
-			folderSelect.each(function () {
-				var currentFolder = $(this);
+    // get a list of available page folders
+    stAjaxCall('getPageFolders', {}, 'GET').then(async (response) => {
+        if(response) {
+			stBuildPageFoldersSelect(response);
 
-				// clear the existing options
-				currentFolder.empty();
+            // convert nested object response into treeselect's format
+            var treeselectOptions = formatForTreeselect(response);
+            var folderContainers = $('.st-parent-folder-container');
 
-				// add a blank option
-				var blankOption = $('<option></option>')
-					.attr('value', '')
-					.attr('selected', 'selected')
-					.text('- none -');
-				currentFolder.append(blankOption);
+            folderContainers.each(function () {
+                var containerDiv = this;
 
-				// loop through the folders and add them to the select
-				if(Object.keys(response).length) {
-					Object.keys(response).forEach(function(folder) {
-						var curr_folder = response[folder];
-						stAddFolderOptions(currentFolder, curr_folder);
-					});
-				}
-			});
-		}
-	});
+                // clear out any existing treeselect instances
+                containerDiv.innerHTML = '';
+
+                // initialise treeselect
+                var domEl = new Treeselect({
+                    parentHtmlContainer: containerDiv,
+                    value: null,
+                    options: treeselectOptions,
+                    isSingleSelect: true,
+                    placeholder: 'Select a folder',
+                    searchable: true,
+					inputCallback: (selectedValue) => {
+						console.log('User selected folder ID:', selectedValue);
+
+						// set the value of the hidden select field to the selected folder ID
+						$(containerDiv).closest('.input').find('select.st-parent-folder-select').val(selectedValue).trigger('change');
+					}
+                });
+            });
+        }
+    });
+}
+
+// convert the nested folder object into the format for Treeselect
+function formatForTreeselect(folderObject) {
+    if (!folderObject || Object.keys(folderObject).length === 0) {
+        return [];
+    }
+
+    return Object.keys(folderObject).map(function(key) {
+        var folder = folderObject[key];
+
+        var node = {
+            name: folder.name,
+            value: folder.id
+        };
+
+        // if this folder has children, recursively process them
+        if (folder.children && Object.keys(folder.children).length > 0) {
+            node.children = formatForTreeselect(folder.children);
+        }
+
+        return node;
+    });
+}
+
+function stBuildPageFoldersSelect(response) {
+	if(response) {
+		var folderSelect = $('.st-parent-folder-select');
+		folderSelect.each(function () {
+			var currentFolder = $(this);
+
+			// clear the existing options
+			currentFolder.empty();
+
+			// add a blank option
+			var blankOption = $('<option></option>')
+				.attr('value', '')
+				.attr('selected', 'selected')
+				.text('- none -');
+			currentFolder.append(blankOption);
+
+			// loop through the folders and add them to the select
+			if(Object.keys(response).length) {
+				Object.keys(response).forEach(function(folder) {
+					var curr_folder = response[folder];
+					stAddFolderOptions(currentFolder, curr_folder);
+				});
+			}
+		});
+	}
 }
 
 function stAddFolderOptions(selectElement, folder, level = 0, parent = "") {
-
-	// build the icons for the level
-	var prefix = '';
-    for(var i = 0; i < level; i++) {
-
-        // set 3 non-breaking spaces per level
-        prefix += '\u00A0\u00A0\u00A0';
-    }
-
-	// add an icon for child options
-	if (level > 0) {
-        prefix += '└─ ';
-    }
-
-	// get the clean & prefixed names
-	var cleanName = folder.name;
-    var prefixedName = prefix + cleanName;
 
 	// build the option element
 	var option = $('<option></option>')
 		.attr('value', folder.id)
 		.attr('data-link', folder.link)
-		.text(prefixedName)
-		.data('clean-name', cleanName)
-		.data('prefixed-name', prefixedName);
+		.text(folder.name);
 
 	// add the parent id if it exists
 	if(parent != "") {
@@ -514,6 +771,9 @@ stAjaxCall('getFilePath', [], 'GET').then(async (response) => {
 
 function stGetPages(type = 'page') {
 	let pages = {};
+
+	// hide the #select-actions element
+	$('#select-actions').hide();
 
 	stAjaxCall('getPages', {type: type}, 'GET').then(async (response) => {
 
