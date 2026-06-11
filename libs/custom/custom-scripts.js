@@ -6,6 +6,9 @@ $(document).ready(function () {
 	// build the file manager nav items
 	stBuildNavItems();
 
+	// close the right panel
+	Vvveb.Gui.toggleRightColumn(false);
+
 	var folder_select = $('select.st-parent-folder-select');
 	folder_select.on('mousedown', function() {
 
@@ -813,7 +816,8 @@ function stGetPages(type = 'page') {
 						url: page.url,
 						folder: page.folder || null,
 						description: page.description || '',
-						type: page.type || 'page'
+						type: page.type || 'page',
+						full_url: page.full_url || ''
 					};
 				}
 			});
@@ -847,3 +851,615 @@ function stAddFolder(folder, parent = "") {
 		});
 	}
 }
+
+window.stElementHighlightConfig = window.stElementHighlightConfig || {
+	items: [
+		{
+			selector: "nav",
+			label: "Navigation",
+			color: "#de750c20",
+			borderColor: "#de750c",
+			labelTextColor: "#ffffff",
+			labelBgColor: "#de750c"
+		},
+		{
+			selector: "img",
+			label: "Image",
+			color: "rgba(14, 165, 233, 0.20)",
+			borderColor: "#0284c7"
+		},
+		{
+			selector: ".st-website-block",
+			label: "Website Block",
+			color: "rgba(14, 165, 233, 0.20)",
+			borderColor: "#515151",
+			labelTextColor: "#ffffff",
+			labelBgColor: "#515151d3"
+		},
+		{
+			selector: "a",
+			label: "Link",
+			color: "rgba(14, 165, 233, 0.20)",
+			borderColor: "#515151",
+			labelTextColor: "#ffffff",
+			labelBgColor: "#515151d3"
+		},
+	],
+	defaultColor: "rgba(249, 115, 22, 0.20)",
+	defaultBorderColor: "#ea580c",
+	defaultLabelTextColor: "#ffffff",
+	defaultLabelBgColor: "rgba(15, 23, 42, 0.90)"
+};
+
+if (Array.isArray(window.stElementHighlightConfig.items)) {
+	window.stElementHighlightConfig.items = window.stElementHighlightConfig.items.map(function(item) {
+		let nextItem = { ...item };
+		if (typeof nextItem.enabled === "undefined") {
+			nextItem.enabled = true;
+		}
+		return nextItem;
+	});
+}
+
+Vvveb.ElementHighlighter = {
+	enabled: false,
+	renderRaf: null,
+	renderRafWindow: null,
+	renderDebounceTimer: null,
+	renderDebounceDelay: 40,
+	hideMenuTimer: null,
+	menuElement: null,
+	isRendering: false,
+	storageKey: "st.vvveb.elementHighlighter.state",
+	styleId: "st-vvveb-element-highlight-style",
+	overlayClass: "st-vvveb-highlight-overlay",
+	labelClass: "st-vvveb-highlight-label",
+	menuId: "st-element-highlight-menu",
+	boundFrameWindow: null,
+
+	init: function() {
+		let self = this;
+
+		if (self.isInitialised) {
+			return;
+		}
+
+		self.isInitialised = true;
+		self.loadState();
+		self.initToggleMenu();
+		self.syncButtonState();
+
+		window.addEventListener("vvveb.iframe.loaded", function() {
+			self.cancelPendingRender();
+			self.bindFrameListeners();
+			if (self.enabled) {
+				self.requestRender();
+			}
+		});
+
+		window.addEventListener("vvveb.getHtml.before", function() {
+			self.clear();
+		});
+
+		window.addEventListener("vvveb.getHtml.after", function() {
+			if (self.enabled) {
+				self.requestRender();
+			}
+		});
+	},
+
+	bindFrameListeners: function() {
+		let self = this;
+		let frameWindow = window.FrameWindow;
+		let frameDoc = window.FrameDocument;
+
+		if (!frameWindow || !frameDoc || !frameDoc.body) {
+			return;
+		}
+
+		if (self.boundFrameWindow !== frameWindow) {
+			self.boundFrameWindow = frameWindow;
+
+			frameWindow.addEventListener("scroll", function() {
+				if (self.enabled) {
+					self.requestRender();
+				}
+			});
+
+			frameWindow.addEventListener("resize", function() {
+				if (self.enabled) {
+					self.requestRender();
+				}
+			});
+		}
+
+		if (self.observer) {
+			self.observer.disconnect();
+		}
+
+		self.observer = new MutationObserver(function() {
+			if (self.isRendering) {
+				return;
+			}
+
+			if (self.enabled) {
+				self.requestRender();
+			}
+		});
+
+		self.observer.observe(frameDoc.body, {
+			subtree: true,
+			childList: true,
+			attributes: true,
+			attributeFilter: ["class", "style"]
+		});
+	},
+
+	getItems: function() {
+		let config = window.stElementHighlightConfig || {};
+		let items = Array.isArray(config.items) ? config.items : [];
+
+		return items.filter(function(item) {
+			return item
+				&& typeof item.selector === "string"
+				&& item.selector.trim() !== ""
+				&& item.enabled !== false;
+		});
+	},
+
+	getConfigItems: function() {
+		let config = window.stElementHighlightConfig || {};
+		let items = Array.isArray(config.items) ? config.items : [];
+
+		return items.filter(function(item) {
+			return item && typeof item.selector === "string" && item.selector.trim() !== "";
+		});
+	},
+
+	setItems: function(items) {
+		if (!Array.isArray(items)) {
+			return;
+		}
+
+		window.stElementHighlightConfig = window.stElementHighlightConfig || {};
+		window.stElementHighlightConfig.items = items.map(function(item) {
+			let nextItem = { ...item };
+			if (typeof nextItem.enabled === "undefined") {
+				nextItem.enabled = true;
+			}
+			return nextItem;
+		});
+
+		this.renderToggleMenu();
+		this.saveState();
+
+		if (this.enabled) {
+			this.requestRender();
+		}
+	},
+
+	loadState: function() {
+		let rawState = null;
+
+		try {
+			rawState = window.localStorage.getItem(this.storageKey);
+		} catch (error) {
+			return;
+		}
+
+		if (!rawState) {
+			return;
+		}
+
+		let state = null;
+		try {
+			state = JSON.parse(rawState);
+		} catch (error) {
+			return;
+		}
+
+		if (!state || typeof state !== "object") {
+			return;
+		}
+
+		if (typeof state.enabled === "boolean") {
+			this.enabled = state.enabled;
+		}
+
+		let config = window.stElementHighlightConfig || {};
+		if (!Array.isArray(config.items)) {
+			return;
+		}
+
+		let enabledMap = (state.items && typeof state.items === "object") ? state.items : {};
+		config.items = config.items.map(function(item) {
+			let nextItem = { ...item };
+			let key = (nextItem.selector || "") + "::" + (nextItem.label || "");
+			if (Object.prototype.hasOwnProperty.call(enabledMap, key)) {
+				nextItem.enabled = !!enabledMap[key];
+			}
+			return nextItem;
+		});
+	},
+
+	saveState: function() {
+		let config = window.stElementHighlightConfig || {};
+		let items = Array.isArray(config.items) ? config.items : [];
+		let persistedItems = {};
+
+		items.forEach(function(item) {
+			if (!item || typeof item.selector !== "string") {
+				return;
+			}
+
+			let key = item.selector + "::" + (item.label || "");
+			persistedItems[key] = (item.enabled !== false);
+		});
+
+		let state = {
+			enabled: this.enabled,
+			items: persistedItems
+		};
+
+		try {
+			window.localStorage.setItem(this.storageKey, JSON.stringify(state));
+		} catch (error) {
+			return;
+		}
+	},
+
+	initToggleMenu: function() {
+		let self = this;
+		let button = document.getElementById("toggle-element-highlight-btn");
+
+		if (!button || self.menuElement) {
+			return;
+		}
+
+		let menu = document.createElement("div");
+		menu.id = self.menuId;
+		menu.className = "dropdown-menu";
+		menu.style.position = "fixed";
+		menu.style.zIndex = "2000";
+		menu.style.minWidth = "240px";
+		menu.style.maxWidth = "320px";
+		menu.style.maxHeight = "280px";
+		menu.style.overflow = "auto";
+		menu.style.display = "none";
+
+		document.body.appendChild(menu);
+		self.menuElement = menu;
+		self.renderToggleMenu();
+
+		let showMenu = function() {
+			self.clearMenuHideTimer();
+			self.renderToggleMenu();
+			self.positionToggleMenu();
+			menu.style.display = "block";
+			menu.classList.add("show");
+		};
+
+		let hideMenu = function() {
+			self.clearMenuHideTimer();
+			self.hideMenuTimer = window.setTimeout(function() {
+				menu.classList.remove("show");
+				menu.style.display = "none";
+			}, 140);
+		};
+
+		button.addEventListener("mouseenter", showMenu);
+		button.addEventListener("mouseleave", hideMenu);
+		button.addEventListener("click", function() {
+			self.hideToggleMenu();
+		});
+
+		menu.addEventListener("mouseenter", function() {
+			self.clearMenuHideTimer();
+		});
+		menu.addEventListener("mouseleave", hideMenu);
+
+		window.addEventListener("resize", function() {
+			if (menu.classList.contains("show")) {
+				self.positionToggleMenu();
+			}
+		});
+	},
+
+	renderToggleMenu: function() {
+		let self = this;
+		let menu = self.menuElement;
+		if (!menu) {
+			return;
+		}
+
+		let items = self.getConfigItems();
+		let html = "<div class='px-3 py-2 fw-semibold border-bottom'>Highlight Elements</div>";
+
+		if (!items.length) {
+			html += "<div class='px-3 py-2 text-muted small'>No highlight selectors configured.</div>";
+			menu.innerHTML = html;
+			return;
+		}
+
+		for (let i = 0; i < items.length; i++) {
+			let item = items[i];
+			let itemId = "st-highlight-toggle-" + i;
+			let checked = (item.enabled !== false) ? "checked" : "";
+			let label = item.label || item.selector;
+
+			html += `
+				<div class="form-check py-2 border-bottom" data-st-highlight-item-index="${i}" style="padding-left: 40px;">
+					<input class="form-check-input" type="checkbox" value="1" id="${itemId}" ${checked}>
+					<label class="form-check-label w-100" for="${itemId}" title="${item.selector}">
+						${label}
+					</label>
+				</div>
+			`;
+		}
+
+		menu.innerHTML = html;
+
+		menu.querySelectorAll("[data-st-highlight-item-index]").forEach(function(wrapper) {
+			let idx = Number(wrapper.getAttribute("data-st-highlight-item-index"));
+			let input = wrapper.querySelector("input[type='checkbox']");
+
+			if (!input || Number.isNaN(idx)) {
+				return;
+			}
+
+			input.addEventListener("click", function(event) {
+				event.stopPropagation();
+			});
+
+			input.addEventListener("change", function() {
+				let config = window.stElementHighlightConfig || {};
+				if (!Array.isArray(config.items) || !config.items[idx]) {
+					return;
+				}
+
+				config.items[idx].enabled = input.checked;
+				self.saveState();
+				if (self.enabled) {
+					self.requestRender();
+				}
+			});
+		});
+	},
+
+	positionToggleMenu: function() {
+		let button = document.getElementById("toggle-element-highlight-btn");
+		let menu = this.menuElement;
+
+		if (!button || !menu) {
+			return;
+		}
+
+		let rect = button.getBoundingClientRect();
+		let left = rect.left;
+		let top = rect.bottom + 6;
+
+		menu.style.left = left + "px";
+		menu.style.top = top + "px";
+	},
+
+	clearMenuHideTimer: function() {
+		if (!this.hideMenuTimer) {
+			return;
+		}
+
+		window.clearTimeout(this.hideMenuTimer);
+		this.hideMenuTimer = null;
+	},
+
+	hideToggleMenu: function() {
+		if (!this.menuElement) {
+			return;
+		}
+
+		this.clearMenuHideTimer();
+		this.menuElement.classList.remove("show");
+		this.menuElement.style.display = "none";
+	},
+
+	toggle: function(forceState = null) {
+		let nextState = (typeof forceState === "boolean") ? forceState : !this.enabled;
+		this.enabled = nextState;
+
+		if (this.enabled) {
+			this.requestRender();
+		} else {
+			this.clear();
+		}
+
+		this.saveState();
+		this.syncButtonState();
+	},
+
+	syncButtonState: function() {
+		let button = document.getElementById("toggle-element-highlight-btn");
+		if (!button) {
+			return;
+		}
+
+		if (this.enabled) {
+			button.classList.add("active");
+			button.setAttribute("aria-pressed", "true");
+			button.setAttribute("title", "Hide element highlights");
+		} else {
+			button.classList.remove("active");
+			button.setAttribute("aria-pressed", "false");
+			button.setAttribute("title", "Show element highlights");
+		}
+
+		this.renderToggleMenu();
+	},
+
+	requestRender: function() {
+		let self = this;
+
+		if (self.renderDebounceTimer) {
+			window.clearTimeout(self.renderDebounceTimer);
+		}
+
+		self.renderDebounceTimer = window.setTimeout(function() {
+			self.renderDebounceTimer = null;
+			self.queueAnimationRender();
+		}, self.renderDebounceDelay);
+	},
+
+	queueAnimationRender: function() {
+		let self = this;
+		let frameWindow = window;
+
+		if (self.renderRaf) {
+			return;
+		}
+
+		self.renderRafWindow = frameWindow;
+		self.renderRaf = frameWindow.requestAnimationFrame(function() {
+			self.renderRaf = null;
+			self.renderRafWindow = null;
+			self.render();
+		});
+	},
+
+	cancelPendingRender: function() {
+		if (this.renderDebounceTimer) {
+			window.clearTimeout(this.renderDebounceTimer);
+			this.renderDebounceTimer = null;
+		}
+
+		if (!this.renderRaf || !this.renderRafWindow) {
+			this.renderRaf = null;
+			this.renderRafWindow = null;
+			return;
+		}
+
+		this.renderRafWindow.cancelAnimationFrame(this.renderRaf);
+		this.renderRaf = null;
+		this.renderRafWindow = null;
+	},
+
+	ensureStyles: function(doc) {
+		if (!doc || !doc.head || doc.getElementById(this.styleId)) {
+			return;
+		}
+
+		let style = doc.createElement("style");
+		style.id = this.styleId;
+		style.textContent = `
+			.${this.overlayClass} {
+				position: absolute;
+				box-sizing: border-box;
+				pointer-events: none;
+				box-shadow: 0 0 8px var(--st-highlight-border, #0284c7);
+				border: 2px solid var(--st-highlight-border, #0284c7);
+				background: var(--st-highlight-color, rgba(14, 165, 233, 0.20));
+				z-index: 2147483000;
+				border-radius: 3px;
+			}
+
+			.${this.overlayClass} .${this.labelClass} {
+				position: absolute;
+				right: 0;
+				top: 0;
+				transform: translateY(-100%);
+				padding: 2px 8px;
+				font-size: 11px;
+				line-height: 1.4;
+				color: var(--st-highlight-label-text, #ffffff);
+				background: var(--st-highlight-label-bg, rgba(15, 23, 42, 0.90));
+				white-space: nowrap;
+				border-top-left-radius: 3px;
+				border-top-right-radius: 3px;
+			}
+		`;
+
+		doc.head.appendChild(style);
+	},
+
+	render: function() {
+		let doc = window.FrameDocument;
+		let frameWindow = window.FrameWindow;
+		let config = window.stElementHighlightConfig || {};
+
+		if (!this.enabled || !doc || !frameWindow || !doc.body) {
+			return;
+		}
+
+		this.isRendering = true;
+
+		try {
+			this.clear();
+			this.ensureStyles(doc);
+
+			let items = this.getItems();
+			if (!items.length) {
+				return;
+			}
+
+			for (let i = 0; i < items.length; i++) {
+				let item = items[i];
+				let matches = [];
+
+				try {
+					matches = doc.querySelectorAll(item.selector);
+				} catch (error) {
+					continue;
+				}
+				let label = item.label || item.selector;
+				let color = item.color || config.defaultColor || "rgba(14, 165, 233, 0.20)";
+				let borderColor = item.borderColor || config.defaultBorderColor || "#0284c7";
+				let labelTextColor = item.labelTextColor || config.defaultLabelTextColor || "#ffffff";
+				let labelBgColor = item.labelBgColor || config.defaultLabelBgColor || "rgba(15, 23, 42, 0.90)";
+
+				matches.forEach((element) => {
+					let rect = element.getBoundingClientRect();
+					if (rect.width <= 0 || rect.height <= 0) {
+						return;
+					}
+
+					let overlay = doc.createElement("div");
+					overlay.classList.add(this.overlayClass);
+					overlay.setAttribute("data-st-highlight-overlay", "true");
+					overlay.style.left = (rect.left + frameWindow.scrollX) + "px";
+					overlay.style.top = (rect.top + frameWindow.scrollY) + "px";
+					overlay.style.width = rect.width + "px";
+					overlay.style.height = rect.height + "px";
+					overlay.style.setProperty("--st-highlight-color", color);
+					overlay.style.setProperty("--st-highlight-border", borderColor);
+					overlay.style.setProperty("--st-highlight-label-text", labelTextColor);
+					overlay.style.setProperty("--st-highlight-label-bg", labelBgColor);
+
+					let labelEl = doc.createElement("span");
+					labelEl.classList.add(this.labelClass);
+					labelEl.textContent = label;
+					overlay.appendChild(labelEl);
+
+					doc.body.appendChild(overlay);
+				});
+			}
+		} finally {
+			this.isRendering = false;
+		}
+	},
+
+	clear: function() {
+		let doc = window.FrameDocument;
+		if (!doc) {
+			return;
+		}
+
+		doc.querySelectorAll("[data-st-highlight-overlay='true']").forEach(function(el) {
+			el.remove();
+		});
+	}
+};
+
+if (Vvveb.Gui) {
+	Vvveb.Gui.toggleElementHighlightOverlay = function() {
+		Vvveb.ElementHighlighter.toggle();
+	};
+}
+
+Vvveb.ElementHighlighter.init();

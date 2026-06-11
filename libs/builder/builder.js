@@ -228,10 +228,10 @@ Vvveb.Access = {
 	level: 3, // 1 - basic, 2 - medium, 3 - advanced
 	basicTags: ["p", "span", "li", "ul", "ol", "a", "b", "em", "i", "strong", "h1", "h2", "h3", "h4", "h5", "h6", "button"], // tags which are allowed to be edited
 	mediumTags: ["div", "blockquote", "img"], // tags which are allowed to be edited with level 2 access
-	advancedTags: ["table", "tr", "td", "th", "thead", "tbody", "tfoot", "input", "select", "textarea", "section"], // tags which are allowed to be edited with level 3 access
+	advancedTags: ["table", "tr", "td", "th", "thead", "tbody", "tfoot", "input", "select", "textarea", "section", "nav"], // tags which are allowed to be edited with level 3 access
 	basicBlockedWrapperTags: ["nav", "form", "header", "footer", "article", "aside"], // child elements of these tags are not allowed to be edited with level 1 access
 	mediumBlockedWrapperTags: ["nav", "form", "header"], // child elements of these tags are not allowed to be edited with level 2 access
-	advancedBlockedWrapperTags: ["form", "st-website-block"], // child elements of these tags are not allowed to be edited with level 3 access
+	advancedBlockedWrapperTags: ["form", "st-website-block", "navbar"], // child elements of these tags are not allowed to be edited with level 3 access
 	blockedClasses: ["st-no-edit"], // classes that are not allowed to be edited (this will also block child elements within the class from being edited)
 	allowedTags: function() {
 		let allowedTags = [];
