@@ -183,6 +183,7 @@ const stNavbarLinksManager = {
 	treeSelect: null,
 	items: [],
 	itemSeq: 1,
+	collapsedDropdowns: {},
 	styleDefaults: {
 		navListClass: "navbar-nav me-auto mb-2 mb-lg-0",
 		linkLiClass: "nav-item",
@@ -269,14 +270,19 @@ const stNavbarLinksManager = {
 							<div class="col-md-5">
 								<div class="st-navbar-status small text-muted mb-2"></div>
 								<div class="st-navbar-tree mb-2"></div>
-								<div class="d-flex gap-2 flex-wrap">
+								<div class="d-flex gap-2 flex-wrap align-items-center">
 									<button type="button" class="btn btn-outline-primary btn-sm st-navbar-add-pages">Add selected pages</button>
-									<button type="button" class="btn btn-outline-secondary btn-sm st-navbar-add-custom">Add custom link</button>
-									<button type="button" class="btn btn-outline-secondary btn-sm st-navbar-add-dropdown">Add dropdown</button>
+									<div class="input-group input-group-sm" style="width:auto">
+										<select class="form-select form-select-sm st-navbar-add-type" style="width:auto">
+											<option value="link">Custom link</option>
+											<option value="dropdown">Dropdown</option>
+										</select>
+										<button type="button" class="btn btn-outline-secondary st-navbar-add-manual">Add</button>
+									</div>
 								</div>
 							</div>
 							<div class="col-md-7">
-								<div class="st-navbar-items border rounded p-2" style="min-height: 280px; max-height: 420px; overflow:auto"></div>
+								<div class="st-navbar-items border rounded p-2" style="min-height: 280px; max-height: 460px; overflow:auto"></div>
 							</div>
 						</div>
 					</div>
@@ -294,13 +300,13 @@ const stNavbarLinksManager = {
 			this.addSelectedPages();
 		});
 
-		modal.querySelector(".st-navbar-add-custom").addEventListener("click", () => {
-			this.items.push(this.createItem({ type: "link", label: "Custom link", url: "#", parentId: null }));
-			this.renderItemsEditor();
-		});
-
-		modal.querySelector(".st-navbar-add-dropdown").addEventListener("click", () => {
-			this.items.push(this.createItem({ type: "dropdown", label: "Dropdown", url: "", parentId: null }));
+		modal.querySelector(".st-navbar-add-manual").addEventListener("click", () => {
+			const type = modal.querySelector(".st-navbar-add-type").value;
+			if (type === "dropdown") {
+				this.items.push(this.createItem({ type: "dropdown", label: "Dropdown", url: "", parentId: null }));
+			} else {
+				this.items.push(this.createItem({ type: "link", label: "Custom link", url: "#", parentId: null }));
+			}
 			this.renderItemsEditor();
 		});
 
@@ -318,6 +324,7 @@ const stNavbarLinksManager = {
 			this.selectedValues = [];
 			this.pageLookup = {};
 			this.items = [];
+			this.expandedItems = new Set();
 		});
 	},
 
@@ -390,6 +397,10 @@ const stNavbarLinksManager = {
 	},
 
 	renderItemsEditor: function() {
+		if (!this.expandedItems) {
+			this.expandedItems = new Set();
+		}
+
 		const modalEl = document.getElementById(this.modalId);
 		if (!modalEl) {
 			return;
@@ -401,112 +412,319 @@ const stNavbarLinksManager = {
 		}
 
 		if (!this.items.length) {
-			container.innerHTML = "<div class='text-muted small p-2'>No links yet. Add pages, custom links, or dropdowns.</div>";
+			container.innerHTML = "<div class='text-muted small p-2'>No links yet. Add pages or custom links using the buttons on the left.</div>";
 			return;
 		}
 
-		const dropdownOptions = this.items
-			.filter((item) => item.type === "dropdown")
-			.map((item) => `<option value="${item.id}">${this.escapeHtml(item.label || "Dropdown")}</option>`)
-			.join("");
+		const topLevelItems = this.items.filter((item) => !item.parentId);
 
-		container.innerHTML = this.items.map((item, index) => {
-			const parentSelect = item.type === "dropdown"
-				? ""
-				: `
-					<select class="form-select form-select-sm st-navbar-item-parent" data-item-id="${item.id}">
-						<option value="">Top level</option>
-						${dropdownOptions}
-					</select>
-				`;
+		const renderItemRow = (item, isChild) => {
+			const typeBadge = item.type === "dropdown" ? "Dropdown" : (item.type === "page" ? "Page" : "Link");
+			const isExpanded = this.expandedItems.has(item.id);
+			const expandIcon = isExpanded ? "▾" : "▸";
 
-			const urlInput = item.type === "dropdown"
+			// URL field: all non-dropdown items share a URL input with page-search autocomplete
+			const urlField = item.type === "dropdown"
 				? ""
-				: `<input type="text" class="form-control form-control-sm st-navbar-item-url" data-item-id="${item.id}" placeholder="/page-or-url" value="${this.escapeAttr(item.url || "")}">`;
+				: `<div class="mt-2 position-relative">
+					<input type="text" class="form-control form-control-sm st-navbar-item-url st-navbar-page-search" data-item-id="${item.id}" placeholder="URL or search pages…" value="${this.escapeAttr(item.url || "")}" autocomplete="off">
+					<div class="st-navbar-page-results position-absolute bg-white border rounded shadow-sm w-100" data-item-id="${item.id}" style="display:none;z-index:9999;max-height:160px;overflow-y:auto"></div>
+				</div>`;
+
+			const labelField = `<div class="mt-2"><input type="text" class="form-control form-control-sm st-navbar-item-label" data-item-id="${item.id}" placeholder="Label" value="${this.escapeAttr(item.label || "")}"></div>`;
+
+			const parentSelectField = (item.type !== "dropdown" && !isChild)
+				? (() => {
+					const opts = this.items
+						.filter((d) => d.type === "dropdown" && d.id !== item.id)
+						.map((d) => `<option value="${d.id}"${item.parentId === d.id ? " selected" : ""}>${this.escapeHtml(d.label || "Dropdown")}</option>`)
+						.join("");
+					return `<div class="mt-2">
+						<select class="form-select form-select-sm st-navbar-item-parent" data-item-id="${item.id}">
+							<option value=""${!item.parentId ? " selected" : ""}>Top level</option>
+							${opts}
+						</select>
+					</div>`;
+				})()
+				: "";
+
+			const expandedContent = isExpanded
+				? `<div class="st-navbar-item-details">${labelField}${urlField}${parentSelectField}</div>`
+				: "";
 
 			return `
-				<div class="border rounded p-2 mb-2" data-item-id="${item.id}">
-					<div class="d-flex justify-content-between align-items-center mb-2">
-						<span class="badge bg-light text-dark border">${item.type === "dropdown" ? "Dropdown" : (item.type === "page" ? "Page" : "Link")}</span>
-						<div class="d-flex gap-1">
-							<button type="button" class="btn btn-sm btn-light st-navbar-move-up" data-item-id="${item.id}" ${index === 0 ? "disabled" : ""}>Up</button>
-							<button type="button" class="btn btn-sm btn-light st-navbar-move-down" data-item-id="${item.id}" ${index === this.items.length - 1 ? "disabled" : ""}>Down</button>
-							<button type="button" class="btn btn-sm btn-outline-danger st-navbar-remove-item" data-item-id="${item.id}">Remove</button>
-						</div>
+				<div class="st-navbar-row border rounded px-2 py-1 mb-1" data-item-id="${item.id}" draggable="true">
+					<div class="d-flex align-items-center gap-1">
+						<span class="st-navbar-drag-handle text-muted me-1" style="cursor:grab;font-size:1rem;line-height:1;user-select:none" title="Drag to reorder">⠿</span>
+						<span class="badge bg-light text-dark border me-1" style="font-size:0.7em">${typeBadge}</span>
+						<span class="flex-grow-1 text-truncate small st-navbar-item-display-label">${this.escapeHtml(item.label || "(no label)")}</span>
+						<button type="button" class="btn btn-sm btn-link p-0 px-1 st-navbar-expand-btn" data-item-id="${item.id}" title="${isExpanded ? "Collapse" : "Expand"}">${expandIcon}</button>
+						<button type="button" class="btn btn-sm btn-link p-0 px-1 text-danger st-navbar-remove-item" data-item-id="${item.id}" title="Remove">×</button>
 					</div>
-					<div class="row g-2">
-						<div class="col-12">
-							<input type="text" class="form-control form-control-sm st-navbar-item-label" data-item-id="${item.id}" placeholder="Label" value="${this.escapeAttr(item.label || "")}">
-						</div>
-						${item.type === "dropdown" ? "" : `<div class="col-12">${urlInput}</div><div class="col-12">${parentSelect}</div>`}
-					</div>
+					${expandedContent}
 				</div>
 			`;
-		}).join("");
+		};
 
+		let html = "";
+		topLevelItems.forEach((item) => {
+			html += renderItemRow(item, false);
+
+			if (item.type === "dropdown") {
+				const children = this.items.filter((c) => c.parentId === item.id);
+				const collapsed = !!this.collapsedDropdowns[item.id];
+				html += `<div class="st-navbar-children ps-3 border-start ms-2 mb-1" data-parent-id="${item.id}" ${collapsed ? 'style="display:none"' : ""}>`;
+				if (children.length) {
+					children.forEach((child) => {
+						html += renderItemRow(child, true);
+					});
+				} else {
+					html += `<div class="text-muted small py-1 ps-1">No items - add links and assign them to this dropdown.</div>`;
+				}
+				html += "</div>";
+			}
+		});
+
+		container.innerHTML = html;
+
+		// Expand/collapse individual item details
+		container.querySelectorAll(".st-navbar-expand-btn").forEach((btn) => {
+			btn.addEventListener("click", () => {
+				const id = btn.dataset.itemId;
+				if (this.expandedItems.has(id)) {
+					this.expandedItems.delete(id);
+				} else {
+					this.expandedItems.add(id);
+				}
+				this.renderItemsEditor();
+			});
+		});
+
+		// Label input
 		container.querySelectorAll(".st-navbar-item-label").forEach((input) => {
 			input.addEventListener("input", () => {
 				const item = this.findItem(input.dataset.itemId);
 				if (item) {
 					item.label = input.value;
+					const display = container.querySelector(`.st-navbar-row[data-item-id="${item.id}"] .st-navbar-item-display-label`);
+					if (display) {
+						display.textContent = item.label || "(no label)";
+					}
 					if (item.type === "dropdown") {
-						this.renderItemsEditor();
+						// Refresh child dropdowns that reference this dropdown's label
+						container.querySelectorAll(".st-navbar-item-parent").forEach((sel) => {
+							const opt = sel.querySelector(`option[value="${item.id}"]`);
+							if (opt) {
+								opt.textContent = item.label || "Dropdown";
+							}
+						});
 					}
 				}
 			});
 		});
 
-		container.querySelectorAll(".st-navbar-item-url").forEach((input) => {
+		// URL input with page-search autocomplete (shared on the same element)
+		container.querySelectorAll(".st-navbar-page-search").forEach((input) => {
+			const resultsEl = container.querySelector(`.st-navbar-page-results[data-item-id="${input.dataset.itemId}"]`);
+			let debounceTimer = null;
+
+			// Always keep item.url in sync with what the user types
 			input.addEventListener("input", () => {
 				const item = this.findItem(input.dataset.itemId);
 				if (item) {
 					item.url = input.value;
 				}
+
+				clearTimeout(debounceTimer);
+				debounceTimer = setTimeout(() => {
+					const query = input.value.trim().toLowerCase();
+					if (!query || !resultsEl || !Object.keys(this.pageLookup).length) {
+						if (resultsEl) resultsEl.style.display = "none";
+						return;
+					}
+					const matches = Object.values(this.pageLookup).filter((p) =>
+						(p.title && p.title.toLowerCase().includes(query)) ||
+						(p.url && p.url.toLowerCase().includes(query))
+					).slice(0, 12);
+
+					if (!matches.length) {
+						resultsEl.style.display = "none";
+						return;
+					}
+
+					resultsEl.innerHTML = matches.map((p) =>
+						`<div class="px-2 py-1 small st-navbar-page-result-item" style="cursor:pointer" data-url="${this.escapeAttr(p.url)}" data-title="${this.escapeAttr(p.title)}">
+							<div>${this.escapeHtml(p.title)}</div>
+							<div class="text-muted" style="font-size:0.75em">${this.escapeHtml(p.url)}</div>
+						</div>`
+					).join("");
+					resultsEl.style.display = "block";
+
+					resultsEl.querySelectorAll(".st-navbar-page-result-item").forEach((row) => {
+						row.addEventListener("mousedown", (e) => {
+							e.preventDefault();
+							const item = this.findItem(input.dataset.itemId);
+							if (item) {
+								item.url = row.dataset.url;
+								// Only auto-fill label if it's still the default placeholder
+								if (!item.label || item.label === "Custom link" || item.label === "Link") {
+									item.label = row.dataset.title;
+									const labelInput = container.querySelector(`.st-navbar-item-label[data-item-id="${item.id}"]`);
+									if (labelInput) {
+										labelInput.value = row.dataset.title;
+									}
+									const display = container.querySelector(`.st-navbar-row[data-item-id="${item.id}"] .st-navbar-item-display-label`);
+									if (display) {
+										display.textContent = row.dataset.title;
+									}
+								}
+							}
+							input.value = row.dataset.url;
+							resultsEl.style.display = "none";
+						});
+					});
+				}, 200);
+			});
+
+			input.addEventListener("blur", () => {
+				setTimeout(() => {
+					if (resultsEl) resultsEl.style.display = "none";
+				}, 150);
 			});
 		});
 
+		// Parent select
 		container.querySelectorAll(".st-navbar-item-parent").forEach((select) => {
-			const item = this.findItem(select.dataset.itemId);
-			if (!item) {
-				return;
-			}
-
-			select.value = item.parentId || "";
-			select.querySelectorAll("option").forEach((option) => {
-				if (option.value === item.id) {
-					option.disabled = true;
-				}
-			});
-
 			select.addEventListener("change", () => {
-				item.parentId = select.value || null;
+				const item = this.findItem(select.dataset.itemId);
+				if (!item) {
+					return;
+				}
+				const newParentId = select.value || null;
+				item.parentId = newParentId;
+
+				const fromIndex = this.items.indexOf(item);
+				this.items.splice(fromIndex, 1);
+
+				if (newParentId) {
+					const parentIndex = this.items.findIndex((i) => i.id === newParentId);
+					let insertAt = parentIndex + 1;
+					while (insertAt < this.items.length && this.items[insertAt].parentId === newParentId) {
+						insertAt++;
+					}
+					this.items.splice(insertAt, 0, item);
+				} else {
+					this.items.push(item);
+				}
+
+				this.renderItemsEditor();
 			});
 		});
 
+		// Remove
 		container.querySelectorAll(".st-navbar-remove-item").forEach((btn) => {
 			btn.addEventListener("click", () => {
+				this.expandedItems.delete(btn.dataset.itemId);
 				this.removeItem(btn.dataset.itemId);
 				this.renderItemsEditor();
 			});
 		});
 
-		container.querySelectorAll(".st-navbar-move-up").forEach((btn) => {
-			btn.addEventListener("click", () => {
-				this.moveItem(btn.dataset.itemId, -1);
-				this.renderItemsEditor();
-			});
-		});
+		// Drag-and-drop reorder with insertion-line indicator
+		let dragSourceId = null;
 
-		container.querySelectorAll(".st-navbar-move-down").forEach((btn) => {
-			btn.addEventListener("click", () => {
-				this.moveItem(btn.dataset.itemId, 1);
-				this.renderItemsEditor();
+		const clearDropIndicators = () => {
+			container.querySelectorAll(".st-navbar-row").forEach((r) => {
+				r.classList.remove("st-navbar-drop-before", "st-navbar-drop-after");
+			});
+		};
+
+		const getDropPosition = (e, row) => {
+			const rect = row.getBoundingClientRect();
+			return (e.clientY - rect.top) < (rect.height / 2) ? "before" : "after";
+		};
+
+		container.querySelectorAll(".st-navbar-row").forEach((row) => {
+			row.addEventListener("dragstart", (e) => {
+				dragSourceId = row.dataset.itemId;
+				e.dataTransfer.effectAllowed = "move";
+				e.dataTransfer.setData("text/plain", row.dataset.itemId);
+				setTimeout(() => { row.style.opacity = "0.4"; }, 0);
+			});
+
+			row.addEventListener("dragend", () => {
+				row.style.opacity = "";
+				clearDropIndicators();
+			});
+
+			row.addEventListener("dragover", (e) => {
+				e.preventDefault();
+				e.dataTransfer.dropEffect = "move";
+				clearDropIndicators();
+				const pos = getDropPosition(e, row);
+				row.classList.add(pos === "before" ? "st-navbar-drop-before" : "st-navbar-drop-after");
+			});
+
+			row.addEventListener("dragleave", (e) => {
+				// Only clear if leaving to outside the container entirely
+				if (!row.contains(e.relatedTarget)) {
+					row.classList.remove("st-navbar-drop-before", "st-navbar-drop-after");
+				}
+			});
+
+			row.addEventListener("drop", (e) => {
+				e.preventDefault();
+				const pos = getDropPosition(e, row);
+				clearDropIndicators();
+				if (dragSourceId && dragSourceId !== row.dataset.itemId) {
+					this.moveItemTo(dragSourceId, row.dataset.itemId, pos);
+					this.renderItemsEditor();
+				}
+				dragSourceId = null;
 			});
 		});
 	},
 
 	findItem: function(id) {
 		return this.items.find((item) => item.id === id) || null;
+	},
+
+	// Move dragged item before or after the target item, respecting peer groups
+	moveItemTo: function(fromId, toId, pos) {
+		const fromItem = this.findItem(fromId);
+		const toItem   = this.findItem(toId);
+		if (!fromItem || !toItem || fromId === toId) {
+			return;
+		}
+
+		// Prevent dropping a dropdown into one of its own children
+		if (fromItem.type === "dropdown" && toItem.parentId === fromItem.id) {
+			return;
+		}
+
+		const fromIndex = this.items.indexOf(fromItem);
+		if (fromIndex === -1) {
+			return;
+		}
+
+		// Remove from current position
+		this.items.splice(fromIndex, 1);
+
+		// Adopt target's parent context
+		fromItem.parentId = toItem.parentId || null;
+
+		// Insert before or after the target
+		let toIndex = this.items.indexOf(toItem);
+		if (toIndex === -1) {
+			this.items.push(fromItem);
+			return;
+		}
+
+		if (pos === "after") {
+			toIndex += 1;
+		}
+
+		this.items.splice(toIndex, 0, fromItem);
 	},
 
 	removeItem: function(id) {
@@ -516,30 +734,50 @@ const stNavbarLinksManager = {
 		}
 
 		if (removed.type === "dropdown") {
-			this.items.forEach((item) => {
-				if (item.parentId === removed.id) {
-					item.parentId = null;
-				}
+			// orphan children become top-level, inserted at the dropdown's former position
+			const removedIndex = this.items.findIndex((item) => item.id === id);
+			const children = this.items.filter((item) => item.parentId === removed.id);
+			children.forEach((item) => {
+				item.parentId = null;
 			});
+
+			// remove the dropdown, then re-insert the orphaned children at that position
+			this.items = this.items.filter((item) => item.id !== id);
+			children.forEach((child, offset) => {
+				this.items.splice(removedIndex + offset, 0, child);
+			});
+			return;
 		}
 
 		this.items = this.items.filter((item) => item.id !== id);
 	},
 
 	moveItem: function(id, direction) {
-		const index = this.items.findIndex((item) => item.id === id);
-		if (index === -1) {
+		const item = this.findItem(id);
+		if (!item) {
 			return;
 		}
 
-		const nextIndex = index + direction;
-		if (nextIndex < 0 || nextIndex >= this.items.length) {
+		// build the peer list: top-level items or siblings sharing the same parentId
+		const peers = item.parentId
+			? this.items.filter((i) => i.parentId === item.parentId)
+			: this.items.filter((i) => !i.parentId);
+
+		const peerIndex = peers.findIndex((i) => i.id === id);
+		const targetPeerIndex = peerIndex + direction;
+		if (targetPeerIndex < 0 || targetPeerIndex >= peers.length) {
 			return;
 		}
 
-		const current = this.items[index];
-		this.items[index] = this.items[nextIndex];
-		this.items[nextIndex] = current;
+		// swap the two items within the flat this.items array
+		const fromIndex = this.items.indexOf(item);
+		const toIndex = this.items.indexOf(peers[targetPeerIndex]);
+		if (fromIndex === -1 || toIndex === -1) {
+			return;
+		}
+
+		this.items[fromIndex] = peers[targetPeerIndex];
+		this.items[toIndex] = item;
 	},
 
 	addSelectedPages: function() {

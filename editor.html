@@ -91,6 +91,10 @@
 					<i class="la la-download"></i>
 				</button> -->
 
+				<button class="btn btn-light d-none" title="Page details" id="st-page-details-btn">
+					<i class="la la-cog la-lg"></i>
+				</button>
+
 			</div>
 
 
@@ -1590,8 +1594,8 @@
 			<span>{%=title%}</span>
 			<div class="file-actions">
 				<button href="#" class="delete btn btn-outline-danger" title="Delete"><i class="la la-trash"></i></button>
-				<a href="{%=url%}" target="_blank" class="view btn btn-outline-primary" title="View page"><i class="la la la-external-link-alt"></i></a>
-				<button href="#" class="rename btn btn-outline-primary" title="Rename"><i class="la la-pen"></i></button>
+				<a href="{% if (typeof full_url !== 'undefined' && full_url) { %}{%=full_url%}{% } else { %}{%=url%}{% } %}" target="_blank" class="view btn btn-outline-primary" title="View page"><i class="la la la-external-link-alt"></i></a>
+				<button href="#" class="page-details btn btn-outline-primary" title="Page details"><i class="la la-cog"></i></button>
 			</div>
 		</label> <input type="checkbox" id="{%=name%}" />
 		<!-- <ol></ol> -->
@@ -2023,6 +2027,47 @@
 
 			</form>
 
+		</div>
+	</div>
+
+	<!-- Page Details Modal -->
+	<div class="modal fade" id="st-page-details-modal" tabindex="-1" role="dialog" aria-labelledby="st-page-details-title-label">
+		<div class="modal-dialog modal-md" role="document">
+			<div class="modal-content">
+				<div class="modal-header">
+					<h5 class="modal-title" id="st-page-details-title-label">Page Details</h5>
+					<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+				</div>
+				<div class="modal-body">
+					<div class="mb-3">
+						<label for="st-page-details-name" class="form-label">Page Title</label>
+						<input type="text" class="form-control" id="st-page-details-name" placeholder="Page title">
+					</div>
+					<div class="mb-3">
+						<label for="st-page-details-link" class="form-label">URL Slug</label>
+						<div class="input-group">
+							<input type="text" class="form-control" id="st-page-details-link" placeholder="/page-slug" readonly>
+							<button class="btn btn-outline-secondary" type="button" id="st-page-details-link-unlock" title="Unlock to edit URL slug">
+								<i class="la la-lock"></i>
+							</button>
+						</div>
+						<div class="form-text">Changing the URL will break any existing links to this page.</div>
+					</div>
+					<div class="mb-3">
+						<label for="st-page-details-menu-select" class="form-label">Navigation Menu</label>
+						<select class="form-select" id="st-page-details-menu-select">
+							<option value="">Loading…</option>
+						</select>
+					</div>
+					<div>
+						<button type="button" class="btn btn-sm btn-outline-secondary" id="st-page-details-set-default">Set selected menu as site default</button>
+					</div>
+				</div>
+				<div class="modal-footer">
+					<button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+					<button type="button" class="btn btn-primary" id="st-page-details-save">Save</button>
+				</div>
+			</div>
 		</div>
 	</div>
 

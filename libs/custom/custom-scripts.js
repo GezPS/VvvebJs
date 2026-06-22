@@ -1462,4 +1462,273 @@ if (Vvveb.Gui) {
 	};
 }
 
+// Page Details Modal — rename page, edit URL slug, and link navigation menu
+let stCurrentPageAutoid = null;
+
+const stPageDetailsModal = {
+	_modal: null,
+	_originalTitle: '',
+	_originalLink: '',
+	_originalMenuAutoid: '',
+	_linkUnlocked: false,
+
+	getModal: function() {
+		if (!this._modal) {
+			const el = document.getElementById('st-page-details-modal');
+			if (el) {
+				this._modal = bootstrap.Modal.getOrCreateInstance(el);
+			}
+		}
+		return this._modal;
+	},
+
+	open: function(pageAutoid) {
+		if (!pageAutoid || pageAutoid.indexOf('menu_') === 0) {
+			return;
+		}
+
+		stCurrentPageAutoid = pageAutoid;
+
+		const modal = this.getModal();
+		if (!modal) {
+			return;
+		}
+
+		// Reset link unlock state
+		this._linkUnlocked = false;
+		const linkInput = document.getElementById('st-page-details-link');
+		const lockBtn = document.getElementById('st-page-details-link-unlock');
+		if (linkInput) {
+			linkInput.readOnly = true;
+		}
+		if (lockBtn) {
+			lockBtn.innerHTML = '<i class="la la-lock"></i>';
+		}
+
+		// Reset fields to loading state
+		const nameInput = document.getElementById('st-page-details-name');
+		const menuSelect = document.getElementById('st-page-details-menu-select');
+		if (nameInput) {
+			nameInput.value = '';
+			nameInput.placeholder = 'Loading…';
+		}
+		if (linkInput) {
+			linkInput.value = '';
+		}
+		if (menuSelect) {
+			menuSelect.innerHTML = '<option value="">Loading…</option>';
+			menuSelect.disabled = true;
+		}
+
+		modal.show();
+
+		stAjaxCall('getPageDetails', { page_autoid: pageAutoid }, 'GET').then(function(response) {
+			if (!response) {
+				return;
+			}
+
+			const nameInput = document.getElementById('st-page-details-name');
+			const linkInput = document.getElementById('st-page-details-link');
+			const menuSelect = document.getElementById('st-page-details-menu-select');
+
+			if (nameInput) {
+				nameInput.value = response.title || '';
+				nameInput.placeholder = 'Page title';
+				stPageDetailsModal._originalTitle = response.title || '';
+			}
+			if (linkInput) {
+				linkInput.value = response.link || '';
+				stPageDetailsModal._originalLink = response.link || '';
+			}
+
+			if (menuSelect) {
+				menuSelect.disabled = false;
+				const menus = response.menus || [];
+				const linkedMenuAutoid = response.linked_menu_autoid || '';
+				stPageDetailsModal._originalMenuAutoid = linkedMenuAutoid;
+
+				let html = '<option value="">— No linked menu —</option>';
+				menus.forEach(function(menu) {
+					const isSelected = menu.autoid === linkedMenuAutoid ? ' selected' : '';
+					const defaultLabel = menu['default'] ? ' (default)' : '';
+					html += `<option value="${menu.autoid}"${isSelected}>${menu.name}${defaultLabel}</option>`;
+				});
+				menuSelect.innerHTML = html;
+			}
+		});
+	},
+
+	save: function() {
+		if (!stCurrentPageAutoid) {
+			return;
+		}
+
+		const nameInput  = document.getElementById('st-page-details-name');
+		const linkInput  = document.getElementById('st-page-details-link');
+		const menuSelect = document.getElementById('st-page-details-menu-select');
+
+		const title       = nameInput ? nameInput.value.trim() : '';
+		const link        = (linkInput && this._linkUnlocked) ? linkInput.value.trim() : '';
+		const menuAutoid  = menuSelect ? menuSelect.value : '';
+
+		if (!title) {
+			displayToast('bg-warning', 'Warning', 'Page title cannot be empty.');
+			return;
+		}
+
+		const titleChanged = title !== this._originalTitle;
+		const linkChanged  = link !== '' && link !== this._originalLink;
+		const menuChanged  = menuAutoid !== this._originalMenuAutoid;
+
+		const tasks = [];
+
+		if (titleChanged || linkChanged) {
+			const renameData = { page_autoid: stCurrentPageAutoid, title: title };
+			if (linkChanged) {
+				renameData.link = link;
+			}
+			tasks.push(
+				stAjaxCall('renamePage', renameData, 'POST').then(function(response) {
+					if (response && response.success) {
+						// Update the label in the file tree
+						const treeItem = document.querySelector(`[data-id="${stCurrentPageAutoid}"]`);
+						if (treeItem) {
+							const span = treeItem.querySelector('label span');
+							if (span) {
+								span.textContent = response.title;
+							}
+						}
+					}
+				})
+			);
+		}
+
+		if (menuChanged) {
+			tasks.push(
+				stAjaxCall('linkPageMenu', { page_autoid: stCurrentPageAutoid, menu_autoid: menuAutoid }, 'POST')
+			);
+		}
+
+		if (!tasks.length) {
+			bootstrap.Modal.getOrCreateInstance(document.getElementById('st-page-details-modal')).hide();
+			return;
+		}
+
+		Promise.all(tasks).then(function() {
+			displayToast('bg-success', 'Success', 'Page details saved.');
+			bootstrap.Modal.getOrCreateInstance(document.getElementById('st-page-details-modal')).hide();
+		}).catch(function() {
+			displayToast('bg-danger', 'Error', 'Could not save page details.');
+		});
+	},
+
+	init: function() {
+		const saveBtn = document.getElementById('st-page-details-save');
+		if (saveBtn) {
+			saveBtn.addEventListener('click', function() {
+				stPageDetailsModal.save();
+			});
+		}
+
+		const lockBtn = document.getElementById('st-page-details-link-unlock');
+		if (lockBtn) {
+			lockBtn.addEventListener('click', function() {
+				const linkInput = document.getElementById('st-page-details-link');
+				stPageDetailsModal._linkUnlocked = !stPageDetailsModal._linkUnlocked;
+				if (linkInput) {
+					linkInput.readOnly = !stPageDetailsModal._linkUnlocked;
+				}
+				lockBtn.innerHTML = stPageDetailsModal._linkUnlocked
+					? '<i class="la la-unlock"></i>'
+					: '<i class="la la-lock"></i>';
+			});
+		}
+
+		const defaultBtn = document.getElementById('st-page-details-set-default');
+		if (defaultBtn) {
+			defaultBtn.addEventListener('click', function() {
+				const menuSelect = document.getElementById('st-page-details-menu-select');
+				const menuAutoid = menuSelect ? menuSelect.value : '';
+				if (!menuAutoid) {
+					displayToast('bg-warning', 'Warning', 'Please select a menu to set as default.');
+					return;
+				}
+				stAjaxCall('setDefaultMenu', { menu_autoid: menuAutoid }, 'POST').then(function(response) {
+					if (response && response.success) {
+						displayToast('bg-success', 'Success', 'Default menu set.');
+						// Refresh menu list to show updated default labels
+						stAjaxCall('getPageDetails', { page_autoid: stCurrentPageAutoid }, 'GET').then(function(resp) {
+							if (!resp) {
+								return;
+							}
+							const menuSelect = document.getElementById('st-page-details-menu-select');
+							if (!menuSelect) {
+								return;
+							}
+							const currentValue = menuSelect.value;
+							const menus = resp.menus || [];
+							let html = '<option value="">— No linked menu —</option>';
+							menus.forEach(function(menu) {
+								const isSelected = menu.autoid === currentValue ? ' selected' : '';
+								const defaultLabel = menu['default'] ? ' (default)' : '';
+								html += `<option value="${menu.autoid}"${isSelected}>${menu.name}${defaultLabel}</option>`;
+							});
+							menuSelect.innerHTML = html;
+						});
+					}
+				});
+			});
+		}
+
+		// Toolbar button
+		const toolbarBtn = document.getElementById('st-page-details-btn');
+		if (toolbarBtn) {
+			toolbarBtn.addEventListener('click', function() {
+				stPageDetailsModal.open(stCurrentPageAutoid);
+			});
+		}
+
+		// Page list .page-details button (event delegation on file manager)
+		const filemanager = document.getElementById('filemanager');
+		if (filemanager) {
+			filemanager.addEventListener('click', function(e) {
+				const btn = e.target.closest('.page-details');
+				if (!btn) {
+					return;
+				}
+				e.stopImmediatePropagation();
+				e.preventDefault();
+				const li = btn.closest('li[data-page]');
+				if (!li) {
+					return;
+				}
+				const pageId = li.dataset.id || null;
+				if (pageId) {
+					stPageDetailsModal.open(pageId);
+				}
+			}, true); // capture phase so we beat builder.js
+		}
+	}
+};
+
+window.addEventListener('vvveb.FileManager.loadPage', function(e) {
+	stCurrentPageAutoid = (e.detail && e.detail.id) ? e.detail.id : null;
+
+	const previewBtn = document.querySelector('.btn-preview-url');
+	if (previewBtn) {
+		previewBtn.href = (e.detail && e.detail.full_url) ? e.detail.full_url : '#';
+	}
+
+	const btn = document.getElementById('st-page-details-btn');
+	if (btn) {
+		if (stCurrentPageAutoid && stCurrentPageAutoid.indexOf('menu_') !== 0) {
+			btn.classList.remove('d-none');
+		} else {
+			btn.classList.add('d-none');
+		}
+	}
+});
+
+stPageDetailsModal.init();
+
 Vvveb.ElementHighlighter.init();
