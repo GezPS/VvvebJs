@@ -131,10 +131,32 @@ section:hover .container-fluid > .row > .col {
   outline: 1px dashed rgba(var(--bs-success-rgb), 0.35);
   outline-offset: -2px; }
 
-/* Navbar links editor — drag-and-drop insertion line */
-.st-navbar-row.st-navbar-drop-before {
-  border-top: 2px solid var(--bs-primary) !important;
-  margin-top: -1px; }
-.st-navbar-row.st-navbar-drop-after {
-  border-bottom: 2px solid var(--bs-primary) !important;
-  margin-bottom: -1px; }
+/* Navbar links editor — animated drag-and-drop insertion marker */
+.st-navbar-row {
+  transition: transform 0.12s ease-out; }
+
+.st-navbar-items {
+  position: relative; }
+
+.st-navbar-drop-marker {
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  height: 3px;
+  background: var(--bs-primary, #0d6efd);
+  border-radius: 3px;
+  pointer-events: none;
+  z-index: 10;
+  opacity: 0;
+  transition: top 0.08s ease-out, opacity 0.1s ease-out; }
+
+.st-navbar-drop-marker::before {
+  content: '';
+  position: absolute;
+  left: -3px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 8px;
+  height: 8px;
+  background: var(--bs-primary, #0d6efd);
+  border-radius: 50%; }

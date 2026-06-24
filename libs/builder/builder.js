@@ -1156,6 +1156,8 @@ Vvveb.Builder = {
 
 		if(typeof stAjaxCall === 'function') {
 			stAjaxCall(action, data, 'POST').then(async (response) => {
+				window.stNavMenuName = (response && response.nav_menu_name) ? response.nav_menu_name : '';
+				window.stNavChanged  = false;
 				if(response && response.html) {
 					let html = response.html;
 					if (html) {
@@ -2557,6 +2559,15 @@ Vvveb.Builder = {
 
 		// this means we're creating a new page
 		if(typeof stAjaxCall === 'function') {
+
+			// if the nav has changed, ask the user to confirm before proceeding
+			if (window.stNavChanged && window.stNavMenuName && typeof stNavSaveConfirm === 'function') {
+				const navConfirmed = await stNavSaveConfirm(window.stNavMenuName);
+				if (!navConfirmed) {
+					return;
+				}
+			}
+
 			stAjaxCall(action, data, 'POST', true).then(async (response) => {
 
 				// check the response for a new id
@@ -2587,6 +2598,7 @@ Vvveb.Builder = {
 						// reload the html
 						Vvveb.FileManager.reloadCurrentPage();
 						document.querySelectorAll("#top-panel .save-btn").forEach(e => e.setAttribute("disabled", "true"));
+						window.stNavChanged = false;
 					})
 					.catch((err) => {
 						if (error) error(err);

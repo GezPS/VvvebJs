@@ -1731,4 +1731,73 @@ window.addEventListener('vvveb.FileManager.loadPage', function(e) {
 
 stPageDetailsModal.init();
 
+/**
+ * stNavSaveConfirm: Shows a Bootstrap 5 confirmation modal before saving nav changes.
+ * Returns a Promise that resolves to true (proceed) or false (cancel).
+ *
+ * @param {string} menuName - The name of the navigation menu being changed.
+ * @returns {Promise<boolean>}
+ */
+function stNavSaveConfirm(menuName) {
+	return new Promise(function(resolve) {
+		var modalId = 'st-nav-save-confirm-modal';
+		var existing = document.getElementById(modalId);
+		if (existing) {
+			existing.remove();
+		}
+
+		var modal = document.createElement('div');
+		modal.id = modalId;
+		modal.className = 'modal fade';
+		modal.setAttribute('tabindex', '-1');
+		modal.setAttribute('aria-modal', 'true');
+		modal.setAttribute('role', 'dialog');
+		modal.innerHTML = [
+			'<div class="modal-dialog modal-dialog-centered">',
+				'<div class="modal-content">',
+					'<div class="modal-header">',
+						'<h5 class="modal-title"><i class="la la-globe me-1"></i> Navigation Changes</h5>',
+						'<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>',
+					'</div>',
+					'<div class="modal-body">',
+						'<p>You have made changes to the <strong class="st-nav-menu-name"></strong> navigation.</p>',
+						'<p class="text-muted mb-0">These changes will be saved and applied to <strong>all pages</strong> using this navigation. Do you want to continue?</p>',
+					'</div>',
+					'<div class="modal-footer">',
+						'<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>',
+						'<button type="button" class="btn btn-primary" id="st-nav-confirm-ok"><i class="la la-save me-1"></i> Save with Navigation</button>',
+					'</div>',
+				'</div>',
+			'</div>'
+		].join('');
+
+		// set menu name safely (no XSS)
+		modal.querySelector('.st-nav-menu-name').textContent = menuName;
+
+		document.body.appendChild(modal);
+
+		var bsModal = new bootstrap.Modal(modal, { backdrop: 'static', keyboard: false });
+		var resolved = false;
+
+		modal.querySelector('#st-nav-confirm-ok').addEventListener('click', function() {
+			resolved = true; // must be set before hide() — Bootstrap fires hide.bs.modal synchronously
+			bsModal.hide();
+			resolve(true);
+		});
+
+		// any modal close that wasn't the OK button means the user cancelled
+		modal.addEventListener('hide.bs.modal', function() {
+			if (!resolved) {
+				resolve(false);
+			}
+		});
+
+		modal.addEventListener('hidden.bs.modal', function() {
+			modal.remove();
+		});
+
+		bsModal.show();
+	});
+}
+
 Vvveb.ElementHighlighter.init();

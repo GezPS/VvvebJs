@@ -135,6 +135,9 @@ function registerComponent(component) {
 
 function extendNavbarComponent() {
 	Vvveb.Components.extend("_base", "html/navbar", {
+		onChange: function(node, property, value) {
+			window.stNavChanged = true;
+		},
 		properties: [
 		{
 			name: "Links",
@@ -231,12 +234,48 @@ const stNavbarLinksManager = {
 				searchable: true,
 				disabledBranchNodes: true,
 				inputCallback: (selectedValue) => {
-					if (Array.isArray(selectedValue)) {
-						this.selectedValues = selectedValue;
-					} else if (selectedValue) {
-						this.selectedValues = [selectedValue];
-					} else {
-						this.selectedValues = [];
+					const newSelected = Array.isArray(selectedValue) ? selectedValue : (selectedValue ? [selectedValue] : []);
+					const added   = newSelected.filter(v => !this.selectedValues.includes(v));
+					const removed = this.selectedValues.filter(v => !newSelected.includes(v));
+					this.selectedValues = newSelected;
+
+					if (added.length) {
+						const existingUrls = new Set(
+							this.items
+								.filter(item => (item.type === "page" || item.type === "link") && item.url)
+								.map(item => this.normalizeUrl(item.url))
+						);
+						added.forEach(value => {
+							const page = this.pageLookup[value];
+							if (!page) return;
+							const normalizedUrl = this.normalizeUrl(page.url || "");
+							if (!normalizedUrl || existingUrls.has(normalizedUrl)) return;
+							this.items.push(this.createItem({
+								type: "page",
+								label: page.title || "Page",
+								url: page.url || "#",
+								parentId: null
+							}));
+							existingUrls.add(normalizedUrl);
+						});
+					}
+
+					if (removed.length) {
+						removed.forEach(value => {
+							const page = this.pageLookup[value];
+							if (!page) return;
+							const normalizedUrl = this.normalizeUrl(page.url || "");
+							const match = this.items.find(item =>
+								item.type === "page" && this.normalizeUrl(item.url) === normalizedUrl
+							);
+							if (match) {
+								this.removeItem(match.id);
+							}
+						});
+					}
+
+					if (added.length || removed.length) {
+						this.renderItemsEditor();
 					}
 				}
 			});
@@ -271,8 +310,7 @@ const stNavbarLinksManager = {
 								<div class="st-navbar-status small text-muted mb-2"></div>
 								<div class="st-navbar-tree mb-2"></div>
 								<div class="d-flex gap-2 flex-wrap align-items-center">
-									<button type="button" class="btn btn-outline-primary btn-sm st-navbar-add-pages">Add selected pages</button>
-									<div class="input-group input-group-sm" style="width:auto">
+<div class="input-group input-group-sm" style="width:auto">
 										<select class="form-select form-select-sm st-navbar-add-type" style="width:auto">
 											<option value="link">Custom link</option>
 											<option value="dropdown">Dropdown</option>
@@ -295,10 +333,6 @@ const stNavbarLinksManager = {
 		`;
 
 		document.body.appendChild(modal);
-
-		modal.querySelector(".st-navbar-add-pages").addEventListener("click", () => {
-			this.addSelectedPages();
-		});
 
 		modal.querySelector(".st-navbar-add-manual").addEventListener("click", () => {
 			const type = modal.querySelector(".st-navbar-add-type").value;
@@ -453,7 +487,7 @@ const stNavbarLinksManager = {
 				: "";
 
 			return `
-				<div class="st-navbar-row border rounded px-2 py-1 mb-1" data-item-id="${item.id}" draggable="true">
+				<div class="st-navbar-row border rounded px-2 py-1 mb-1" data-item-id="${item.id}" draggable="true" style="cursor:pointer">
 					<div class="d-flex align-items-center gap-1">
 						<span class="st-navbar-drag-handle text-muted me-1" style="cursor:grab;font-size:1rem;line-height:1;user-select:none" title="Drag to reorder">⠿</span>
 						<span class="badge bg-light text-dark border me-1" style="font-size:0.7em">${typeBadge}</span>
@@ -487,10 +521,17 @@ const stNavbarLinksManager = {
 
 		container.innerHTML = html;
 
-		// Expand/collapse individual item details
-		container.querySelectorAll(".st-navbar-expand-btn").forEach((btn) => {
-			btn.addEventListener("click", () => {
-				const id = btn.dataset.itemId;
+		const dropMarker = document.createElement("div");
+		dropMarker.className = "st-navbar-drop-marker";
+		container.appendChild(dropMarker);
+
+		// Expand/collapse on row click (excluding interactive controls and drag handle)
+		container.querySelectorAll(".st-navbar-row").forEach((row) => {
+			row.addEventListener("click", (e) => {
+				if (e.target.closest(".st-navbar-remove-item, input, select, textarea, .st-navbar-drag-handle")) {
+					return;
+				}
+				const id = row.dataset.itemId;
 				if (this.expandedItems.has(id)) {
 					this.expandedItems.delete(id);
 				} else {
@@ -630,13 +671,39 @@ const stNavbarLinksManager = {
 			});
 		});
 
-		// Drag-and-drop reorder with insertion-line indicator
+		// Drag-and-drop reorder with animated insertion marker
 		let dragSourceId = null;
+		let dropTargetId  = null;
+		let dropPos       = null;
+		let lastDropKey   = null;
 
-		const clearDropIndicators = () => {
-			container.querySelectorAll(".st-navbar-row").forEach((r) => {
-				r.classList.remove("st-navbar-drop-before", "st-navbar-drop-after");
+		let placeholderHeight = 36;
+
+		const clearTranslations = () => {
+			container.querySelectorAll(".st-navbar-row").forEach(r => {
+				r.style.transform = "";
 			});
+		};
+
+		const applyTranslations = (targetRow, pos) => {
+			const parent   = targetRow.parentElement;
+			const siblings = Array.from(parent.querySelectorAll(":scope > .st-navbar-row"));
+			const idx      = siblings.indexOf(targetRow);
+			const from     = pos === "before" ? idx : idx + 1;
+
+			siblings.forEach((sibling, i) => {
+				if (i >= from && sibling.dataset.itemId !== dragSourceId) {
+					sibling.style.transform = `translateY(${placeholderHeight}px)`;
+				}
+			});
+		};
+
+		const hideMarker = () => {
+			dropMarker.style.opacity = "0";
+			clearTranslations();
+			dropTargetId = null;
+			dropPos      = null;
+			lastDropKey  = null;
 		};
 
 		const getDropPosition = (e, row) => {
@@ -645,8 +712,20 @@ const stNavbarLinksManager = {
 		};
 
 		container.querySelectorAll(".st-navbar-row").forEach((row) => {
+			let dragFromHandle = false;
+
+			row.addEventListener("mousedown", (e) => {
+				dragFromHandle = !!e.target.closest(".st-navbar-drag-handle");
+			});
+
 			row.addEventListener("dragstart", (e) => {
-				dragSourceId = row.dataset.itemId;
+				if (!dragFromHandle) {
+					e.preventDefault();
+					return;
+				}
+				dragFromHandle    = false;
+				dragSourceId      = row.dataset.itemId;
+				placeholderHeight = row.offsetHeight;
 				e.dataTransfer.effectAllowed = "move";
 				e.dataTransfer.setData("text/plain", row.dataset.itemId);
 				setTimeout(() => { row.style.opacity = "0.4"; }, 0);
@@ -654,34 +733,77 @@ const stNavbarLinksManager = {
 
 			row.addEventListener("dragend", () => {
 				row.style.opacity = "";
-				clearDropIndicators();
+				hideMarker();
 			});
 
 			row.addEventListener("dragover", (e) => {
 				e.preventDefault();
 				e.dataTransfer.dropEffect = "move";
-				clearDropIndicators();
-				const pos = getDropPosition(e, row);
-				row.classList.add(pos === "before" ? "st-navbar-drop-before" : "st-navbar-drop-after");
+
+				const pos    = getDropPosition(e, row);
+				const newKey = row.dataset.itemId + ":" + pos;
+
+				dropTargetId = row.dataset.itemId;
+				dropPos      = pos;
+
+				if (newKey === lastDropKey) return;
+				lastDropKey = newKey;
+
+				// Clear transforms first so getBoundingClientRect() returns the
+				// original (untransformed) row position, not the translated one.
+				clearTranslations();
+
+				const rowRect       = row.getBoundingClientRect();
+				const containerRect = container.getBoundingClientRect();
+				const topOffset = pos === "before"
+					? rowRect.top    - containerRect.top + container.scrollTop - 2
+					: rowRect.bottom - containerRect.top + container.scrollTop - 2;
+
+				// Push sibling rows apart to show the insertion gap.
+				applyTranslations(row, pos);
+
+				dropMarker.style.top     = topOffset + "px";
+				dropMarker.style.opacity = "1";
 			});
 
 			row.addEventListener("dragleave", (e) => {
-				// Only clear if leaving to outside the container entirely
-				if (!row.contains(e.relatedTarget)) {
-					row.classList.remove("st-navbar-drop-before", "st-navbar-drop-after");
+				if (!container.contains(e.relatedTarget)) {
+					hideMarker();
 				}
 			});
 
 			row.addEventListener("drop", (e) => {
 				e.preventDefault();
-				const pos = getDropPosition(e, row);
-				clearDropIndicators();
-				if (dragSourceId && dragSourceId !== row.dataset.itemId) {
-					this.moveItemTo(dragSourceId, row.dataset.itemId, pos);
+				if (dragSourceId && dropTargetId && dragSourceId !== dropTargetId) {
+					this.moveItemTo(dragSourceId, dropTargetId, dropPos);
 					this.renderItemsEditor();
 				}
+				hideMarker();
 				dragSourceId = null;
 			});
+		});
+
+		// Container as fallback drop target — handles the gap over the marker (pointer-events:none)
+		container.addEventListener("dragover", (e) => {
+			if (!dragSourceId) return;
+			e.preventDefault();
+			e.dataTransfer.dropEffect = "move";
+		});
+
+		container.addEventListener("drop", (e) => {
+			e.preventDefault();
+			if (dragSourceId && dropTargetId && dragSourceId !== dropTargetId) {
+				this.moveItemTo(dragSourceId, dropTargetId, dropPos);
+				this.renderItemsEditor();
+			}
+			hideMarker();
+			dragSourceId = null;
+		});
+
+		container.addEventListener("dragleave", (e) => {
+			if (!container.contains(e.relatedTarget)) {
+				hideMarker();
+			}
 		});
 	},
 
@@ -1003,6 +1125,7 @@ const stNavbarLinksManager = {
 			}
 		});
 
+		window.stNavChanged = true;
 		Vvveb.Builder.selectNode(this.activeNode);
 		Vvveb.TreeList.loadComponents();
 		Vvveb.TreeList.selectComponent(this.activeNode);
