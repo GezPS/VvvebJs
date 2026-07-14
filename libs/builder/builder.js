@@ -233,6 +233,9 @@ Vvveb.Access = {
 	mediumBlockedWrapperTags: ["nav", "form", "header"], // child elements of these tags are not allowed to be edited with level 2 access
 	advancedBlockedWrapperTags: ["form", "st-website-block", "navbar"], // child elements of these tags are not allowed to be edited with level 3 access
 	blockedClasses: ["st-no-edit"], // classes that are not allowed to be edited (this will also block child elements within the class from being edited)
+	wrapperExceptions: { // per blocked wrapper: tags that stay editable when inside the "within" selector
+		navbar: [{ within: ".navbar-collapse", tags: ["a", "img"] }]
+	},
 	allowedTags: function() {
 		let allowedTags = [];
 		switch (this.level) {
@@ -280,8 +283,16 @@ Vvveb.Access = {
 
 		// check if the node is inside a blocked wrapper tag
 		for (let i = 0; i < blockedWrapperTags.length; i++) {
-			if (node.closest(blockedWrapperTags[i])) return false;
-			if (node.closest('.' + blockedWrapperTags[i]) && !node.classList.contains(blockedWrapperTags[i])) return false;
+			if (node.closest(blockedWrapperTags[i])
+				|| (node.closest('.' + blockedWrapperTags[i]) && !node.classList.contains(blockedWrapperTags[i]))
+			) {
+				// allow configured exceptions (e.g. links and images inside the navbar links area)
+				let exceptions = this.wrapperExceptions[blockedWrapperTags[i]] || [];
+				let excepted = exceptions.some(exception =>
+					exception.tags.indexOf(node.tagName.toLowerCase()) !== -1 && node.closest(exception.within)
+				);
+				if (!excepted) return false;
+			}
 		}
 
 		// check if the node is a blocked class
@@ -1524,6 +1535,22 @@ Vvveb.Builder = {
 
 	},
 
+	// For nav links, clone/delete should act on the wrapping li / dropdown-submenu so no empty
+	// stubs are left behind. Direct parent check only - closest() would wrongly grab the
+	// top-level li.dropdown when a dropdown-item is selected.
+	getNavEffectiveTarget: function (node) {
+		if (node
+			&& node.tagName
+			&& node.tagName.toLowerCase() == "a"
+			&& node.closest(".navbar-nav")
+			&& node.parentElement
+			&& node.parentElement.matches("li, .dropdown-submenu")
+		) {
+			return node.parentElement;
+		}
+		return node;
+	},
+
 
 	selectNode: function (node) {
 		let SelectBox = document.getElementById("select-box");
@@ -1552,6 +1579,23 @@ Vvveb.Builder = {
 		} else {
 			SelectActions.style.display = "";
 			AddSectionBtn.style.display = "";
+		}
+
+		// inside the navbar only link/image editing is allowed - hide actions that could
+		// restructure the nav or move elements in/out of it
+		let inNavbar = !!node.closest(".navbar");
+		let navButtons = {
+			"drag-btn": !inNavbar,
+			"up-btn": !inNavbar,
+			"down-btn": !inNavbar,
+			"edit-code-btn": !inNavbar,
+			"save-reusable-btn": !inNavbar,
+			"clone-btn": !inNavbar || !node.matches(".dropdown-toggle"),
+			"add-link-btn": inNavbar && (!!node.closest(".navbar-collapse") || node.classList.contains("navbar"))
+		};
+		for (let btnId in navButtons) {
+			let btn = document.getElementById(btnId);
+			if (btn) btn.style.display = navButtons[btnId] ? "" : "none";
 		}
 
 		let target = node;
@@ -1709,6 +1753,12 @@ Vvveb.Builder = {
 					};
 
 					let parent = self.highlightEl;
+
+					// never allow drops inside the navbar - nav editing is limited to links and images
+					if (parent && parent.closest(".navbar")) {
+						document.getElementById("highlight-box").style.display = "none";
+						return;
+					}
 
 					if (self.dragType == "section") {
 						let closest = parent.closest("section, header, footer, body");
@@ -1988,6 +2038,13 @@ Vvveb.Builder = {
 		document.getElementById("drag-btn").addEventListener("mousedown", function (event) {
 			//self.dragElement = self.selectedEl.setAttribute("style",Vvveb.dragElementStyle);
 			if (event.which == 1) {//left click
+
+				// nav elements can't be dragged - nav editing is limited to links and images
+				if (self.selectedEl && self.selectedEl.closest(".navbar")) {
+					event.preventDefault();
+					return false;
+				}
+
 				self.isDragging = true;
 				document.querySelectorAll("#section-actions, #highlight-name, #select-box").forEach(el => el.style.display = "");
 
@@ -2056,7 +2113,7 @@ Vvveb.Builder = {
 
 		document.getElementById("clone-btn").addEventListener("click", function (event) {
 
-			Vvveb.Builder.cloneNode();
+			Vvveb.Builder.cloneNode(Vvveb.Builder.getNavEffectiveTarget(self.selectedEl));
 
 			event.preventDefault();
 			return false;
@@ -2144,7 +2201,7 @@ Vvveb.Builder = {
 		document.getElementById("delete-btn").addEventListener("click", function (event) {
 			document.getElementById("select-box").style.display = "none";
 
-			const node = self.selectedEl;
+			const node = Vvveb.Builder.getNavEffectiveTarget(self.selectedEl);
 
 			Vvveb.Undo.addMutation({
 				type: 'childList',
@@ -2153,7 +2210,7 @@ Vvveb.Builder = {
 				nextSibling: node.nextSibling
 			});
 
-			self.selectedEl.remove();
+			node.remove();
 			Vvveb.TreeList.loadComponents();
 			Vvveb.SectionList.loadSections();
 

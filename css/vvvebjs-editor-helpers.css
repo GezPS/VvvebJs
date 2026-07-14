@@ -160,3 +160,9 @@ section:hover .container-fluid > .row > .col {
   height: 8px;
   background: var(--bs-primary, #0d6efd);
   border-radius: 50%; }
+
+/* Editor-only: open nav dropdowns on hover so nested links can be reached for inline
+   editing (the builder's click handler prevents Bootstrap's click-to-open) */
+.navbar .dropdown:hover > .dropdown-menu,
+.navbar .dropdown-submenu:hover > .dropdown-menu {
+  display: block; }

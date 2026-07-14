@@ -129,8 +129,32 @@ function registerComponent(component) {
 
 	if (!stNavbarExtended) {
 		extendNavbarComponent();
+		extendImageComponentForNav();
 		stNavbarExtended = true;
 	}
+}
+
+// Wrapping a nav image in a link would nest anchors inside the existing nav link, which the
+// server-side DOM round trip restructures and corrupts the menu - block it for nav images
+function extendImageComponentForNav() {
+	const property = Vvveb.Components.getProperty("html/image", "enable_link");
+	if (!property || property.stNavGuarded) {
+		return;
+	}
+
+	const originalOnChange = property.onChange;
+	property.stNavGuarded = true;
+	property.onChange = function(node, value, input) {
+		if (value && node.closest(".navbar")) {
+			displayToast("bg-warning", "Warning", "Images in the navigation cannot be wrapped in a link.");
+			if (input && typeof input.checked !== "undefined") {
+				input.checked = false;
+			}
+			this.setGroup(false);
+			return node;
+		}
+		return originalOnChange.call(this, node, value, input);
+	};
 }
 
 function extendNavbarComponent() {
@@ -194,7 +218,9 @@ const stNavbarLinksManager = {
 		dropdownLiClass: "nav-item dropdown",
 		dropdownToggleClass: "nav-link dropdown-toggle",
 		dropdownMenuClass: "dropdown-menu",
-		dropdownItemClass: "dropdown-item"
+		dropdownItemClass: "dropdown-item",
+		submenuWrapClass: "dropdown-submenu",
+		submenuToggleClass: "dropdown-item dropdown-toggle"
 	},
 
 	open: async function(node) {
@@ -400,15 +426,7 @@ const stNavbarLinksManager = {
 				});
 				parsedItems.push(parentItem);
 
-				dropdownMenu.querySelectorAll(":scope > a, :scope > li > a").forEach((childA) => {
-					if (childA.className) this.styleDefaults.dropdownItemClass = childA.className;
-					parsedItems.push(this.createItem({
-						type: childA.getAttribute("data-type") === "page" ? "page" : "link",
-						label: childA.textContent?.trim() || (childA.getAttribute("data-type") === "page" ? "Page" : "Link"),
-						url: childA.getAttribute("href") || "#",
-						parentId: parentItem.id
-					}));
-				});
+				parsedItems.push(...this.parseMenuLevel(dropdownMenu, parentItem.id, 1));
 			} else {
 				const link = li.querySelector(":scope > a");
 				if (!link) {
@@ -425,6 +443,60 @@ const stNavbarLinksManager = {
 					parentId: null
 				}));
 			}
+		});
+
+		return parsedItems;
+	},
+
+	// Parse one level of a dropdown menu, recursing into nested submenus (max 2 dropdown levels)
+	parseMenuLevel: function(menuEl, parentId, depth) {
+		const parsedItems = [];
+
+		Array.from(menuEl.children).forEach((child) => {
+			// structural dropdown detection - handles div.dropdown-submenu and legacy li/ul wrappers
+			const subToggle = child.querySelector(":scope > a.dropdown-toggle");
+			const subMenu = child.querySelector(":scope > .dropdown-menu");
+
+			if (subToggle && subMenu) {
+				if (depth < 2) {
+					if (child.className) this.styleDefaults.submenuWrapClass = child.className;
+					if (subToggle.className) this.styleDefaults.submenuToggleClass = subToggle.className;
+
+					const subItem = this.createItem({
+						type: "dropdown",
+						label: subToggle.textContent?.trim() || "Dropdown",
+						url: "",
+						parentId: parentId
+					});
+					parsedItems.push(subItem);
+					parsedItems.push(...this.parseMenuLevel(subMenu, subItem.id, depth + 1));
+				} else {
+
+					// too deep - flatten: the toggle becomes a plain link and its children become siblings
+					parsedItems.push(this.createItem({
+						type: "link",
+						label: subToggle.textContent?.trim() || "Link",
+						url: subToggle.getAttribute("href") || "#",
+						parentId: parentId
+					}));
+					parsedItems.push(...this.parseMenuLevel(subMenu, parentId, depth));
+				}
+				return;
+			}
+
+			// direct link, or legacy li > a
+			const childA = (child.tagName === "A") ? child : child.querySelector(":scope > a");
+			if (!childA) {
+				return;
+			}
+
+			if (childA.className) this.styleDefaults.dropdownItemClass = childA.className;
+			parsedItems.push(this.createItem({
+				type: childA.getAttribute("data-type") === "page" ? "page" : "link",
+				label: childA.textContent?.trim() || (childA.getAttribute("data-type") === "page" ? "Page" : "Link"),
+				url: childA.getAttribute("href") || "#",
+				parentId: parentId
+			}));
 		});
 
 		return parsedItems;
@@ -450,9 +522,7 @@ const stNavbarLinksManager = {
 			return;
 		}
 
-		const topLevelItems = this.items.filter((item) => !item.parentId);
-
-		const renderItemRow = (item, isChild) => {
+		const renderItemRow = (item) => {
 			const typeBadge = item.type === "dropdown" ? "Dropdown" : (item.type === "page" ? "Page" : "Link");
 			const isExpanded = this.expandedItems.has(item.id);
 			const expandIcon = isExpanded ? "▾" : "▸";
@@ -467,20 +537,21 @@ const stNavbarLinksManager = {
 
 			const labelField = `<div class="mt-2"><input type="text" class="form-control form-control-sm st-navbar-item-label" data-item-id="${item.id}" placeholder="Label" value="${this.escapeAttr(item.label || "")}"></div>`;
 
-			const parentSelectField = (item.type !== "dropdown" && !isChild)
-				? (() => {
-					const opts = this.items
-						.filter((d) => d.type === "dropdown" && d.id !== item.id)
-						.map((d) => `<option value="${d.id}"${item.parentId === d.id ? " selected" : ""}>${this.escapeHtml(d.label || "Dropdown")}</option>`)
-						.join("");
-					return `<div class="mt-2">
-						<select class="form-select form-select-sm st-navbar-item-parent" data-item-id="${item.id}">
-							<option value=""${!item.parentId ? " selected" : ""}>Top level</option>
-							${opts}
-						</select>
-					</div>`;
-				})()
-				: "";
+			const parentSelectField = (() => {
+				const opts = this.items
+					.filter((d) => d.type === "dropdown"
+						&& d.id !== item.id
+						&& this.canPlace(item, d.id)
+					)
+					.map((d) => `<option value="${d.id}"${item.parentId === d.id ? " selected" : ""}>${this.escapeHtml(this.getItemPathLabel(d))}</option>`)
+					.join("");
+				return `<div class="mt-2">
+					<select class="form-select form-select-sm st-navbar-item-parent" data-item-id="${item.id}">
+						<option value=""${!item.parentId ? " selected" : ""}>Top level</option>
+						${opts}
+					</select>
+				</div>`;
+			})();
 
 			const expandedContent = isExpanded
 				? `<div class="st-navbar-item-details">${labelField}${urlField}${parentSelectField}</div>`
@@ -500,24 +571,29 @@ const stNavbarLinksManager = {
 			`;
 		};
 
-		let html = "";
-		topLevelItems.forEach((item) => {
-			html += renderItemRow(item, false);
+		const renderLevel = (parentId) => {
+			let levelHtml = "";
+			this.items
+				.filter((item) => (item.parentId || null) === parentId)
+				.forEach((item) => {
+					levelHtml += renderItemRow(item);
 
-			if (item.type === "dropdown") {
-				const children = this.items.filter((c) => c.parentId === item.id);
-				const collapsed = !!this.collapsedDropdowns[item.id];
-				html += `<div class="st-navbar-children ps-3 border-start ms-2 mb-1" data-parent-id="${item.id}" ${collapsed ? 'style="display:none"' : ""}>`;
-				if (children.length) {
-					children.forEach((child) => {
-						html += renderItemRow(child, true);
-					});
-				} else {
-					html += `<div class="text-muted small py-1 ps-1">No items - add links and assign them to this dropdown.</div>`;
-				}
-				html += "</div>";
-			}
-		});
+					if (item.type === "dropdown") {
+						const children = this.items.filter((c) => c.parentId === item.id);
+						const collapsed = !!this.collapsedDropdowns[item.id];
+						levelHtml += `<div class="st-navbar-children ps-3 border-start ms-2 mb-1" data-parent-id="${item.id}" ${collapsed ? 'style="display:none"' : ""}>`;
+						if (children.length) {
+							levelHtml += renderLevel(item.id);
+						} else {
+							levelHtml += `<div class="text-muted small py-1 ps-1">No items - add links and assign them to this dropdown.</div>`;
+						}
+						levelHtml += "</div>";
+					}
+				});
+			return levelHtml;
+		};
+
+		let html = renderLevel(null);
 
 		container.innerHTML = html;
 
@@ -556,7 +632,7 @@ const stNavbarLinksManager = {
 						container.querySelectorAll(".st-navbar-item-parent").forEach((sel) => {
 							const opt = sel.querySelector(`option[value="${item.id}"]`);
 							if (opt) {
-								opt.textContent = item.label || "Dropdown";
+								opt.textContent = this.getItemPathLabel(item);
 							}
 						});
 					}
@@ -642,6 +718,13 @@ const stNavbarLinksManager = {
 					return;
 				}
 				const newParentId = select.value || null;
+
+				if (!this.canPlace(item, newParentId)) {
+					displayToast("bg-danger", "Error", "Dropdowns can only be nested 2 levels deep.");
+					this.renderItemsEditor();
+					return;
+				}
+
 				item.parentId = newParentId;
 
 				const fromIndex = this.items.indexOf(item);
@@ -650,7 +733,11 @@ const stNavbarLinksManager = {
 				if (newParentId) {
 					const parentIndex = this.items.findIndex((i) => i.id === newParentId);
 					let insertAt = parentIndex + 1;
-					while (insertAt < this.items.length && this.items[insertAt].parentId === newParentId) {
+
+					// walk past the parent's whole subtree so nested groups stay contiguous
+					while (insertAt < this.items.length
+						&& this.isAncestorOf(newParentId, this.items[insertAt])
+					) {
 						insertAt++;
 					}
 					this.items.splice(insertAt, 0, item);
@@ -811,6 +898,77 @@ const stNavbarLinksManager = {
 		return this.items.find((item) => item.id === id) || null;
 	},
 
+	// Depth of an item: 0 = top level, 1 = inside a top-level dropdown, 2 = inside a nested dropdown
+	getItemDepth: function(item) {
+		let depth = 0;
+		let current = item;
+		while (current && current.parentId && depth < 10) {
+			current = this.findItem(current.parentId);
+			depth++;
+		}
+		return depth;
+	},
+
+	// Height of an item's subtree: 0 for links/pages, 1+ for dropdowns (an empty dropdown still counts as 1)
+	getSubtreeHeight: function(item) {
+		if (item.type !== "dropdown") {
+			return 0;
+		}
+		let height = 1;
+		this.items
+			.filter((child) => child.parentId === item.id)
+			.forEach((child) => {
+				height = Math.max(height, 1 + this.getSubtreeHeight(child));
+			});
+		return height;
+	},
+
+	isAncestorOf: function(ancestorId, item) {
+		let current = item;
+		let count = 0;
+		while (current && current.parentId && count < 10) {
+			if (current.parentId === ancestorId) {
+				return true;
+			}
+			current = this.findItem(current.parentId);
+			count++;
+		}
+		return false;
+	},
+
+	// Check an item can be placed under a parent without exceeding 2 dropdown levels or creating a cycle
+	canPlace: function(item, newParentId) {
+		if (!newParentId) {
+			return true;
+		}
+		if (newParentId === item.id) {
+			return false;
+		}
+		const parent = this.findItem(newParentId);
+		if (!parent || parent.type !== "dropdown") {
+			return false;
+		}
+		if (this.isAncestorOf(item.id, parent)) {
+			return false;
+		}
+		return (this.getItemDepth(parent) + 1 + this.getSubtreeHeight(item)) <= 2;
+	},
+
+	// "Parent ▸ Child" label for nested dropdowns in the parent select
+	getItemPathLabel: function(item) {
+		let label = item.label || "Dropdown";
+		let current = item;
+		let count = 0;
+		while (current && current.parentId && count < 10) {
+			current = this.findItem(current.parentId);
+			if (current) {
+				label = (current.label || "Dropdown") + " ▸ " + label;
+			}
+			count++;
+		}
+		return label;
+	},
+
 	// Move dragged item before or after the target item, respecting peer groups
 	moveItemTo: function(fromId, toId, pos) {
 		const fromItem = this.findItem(fromId);
@@ -819,8 +977,8 @@ const stNavbarLinksManager = {
 			return;
 		}
 
-		// Prevent dropping a dropdown into one of its own children
-		if (fromItem.type === "dropdown" && toItem.parentId === fromItem.id) {
+		// Enforce the 2-level dropdown limit and prevent dropping an item into its own subtree
+		if (!this.canPlace(fromItem, toItem.parentId || null)) {
 			return;
 		}
 
@@ -856,11 +1014,11 @@ const stNavbarLinksManager = {
 		}
 
 		if (removed.type === "dropdown") {
-			// orphan children become top-level, inserted at the dropdown's former position
+			// orphan children are promoted to the deleted dropdown's parent, inserted at its former position
 			const removedIndex = this.items.findIndex((item) => item.id === id);
 			const children = this.items.filter((item) => item.parentId === removed.id);
 			children.forEach((item) => {
-				item.parentId = null;
+				item.parentId = removed.parentId || null;
 			});
 
 			// remove the dropdown, then re-insert the orphaned children at that position
@@ -1091,18 +1249,7 @@ const stNavbarLinksManager = {
 				toggle.setAttribute("aria-expanded", "false");
 				toggle.textContent = item.label || "Dropdown";
 
-				const menu = document.createElement("div");
-				menu.className = this.styleDefaults.dropdownMenuClass;
-
-				this.items
-					.filter((child) => (child.type === "link" || child.type === "page") && child.parentId === item.id)
-					.forEach((child) => {
-						const childLink = document.createElement("a");
-						childLink.className = this.styleDefaults.dropdownItemClass;
-						childLink.setAttribute("href", child.url || "#");
-						childLink.textContent = child.label || (child.type === "page" ? "Page" : "Link");
-						menu.appendChild(childLink);
-					});
+				const menu = this.buildDropdownMenu(item.id, 1);
 
 				li.appendChild(toggle);
 				li.appendChild(menu);
@@ -1131,6 +1278,44 @@ const stNavbarLinksManager = {
 		Vvveb.TreeList.selectComponent(this.activeNode);
 	},
 
+	// Build a dropdown-menu element for a parent item's children, recursing one submenu level.
+	// Nested dropdowns use a plain (non data-bs-toggle) toggle - the flyout is CSS-only, so
+	// Bootstrap's autoClose never sees the level-2 toggle as a menu-closing click.
+	buildDropdownMenu: function(parentId, depth) {
+		const menu = document.createElement("div");
+		menu.className = this.styleDefaults.dropdownMenuClass;
+
+		this.items
+			.filter((child) => child.parentId === parentId)
+			.forEach((child) => {
+				if (child.type === "dropdown" && depth < 2) {
+					const wrap = document.createElement("div");
+					wrap.className = this.styleDefaults.submenuWrapClass;
+
+					const toggle = document.createElement("a");
+					toggle.className = this.styleDefaults.submenuToggleClass;
+					toggle.setAttribute("href", "#");
+					toggle.setAttribute("role", "button");
+					toggle.setAttribute("aria-expanded", "false");
+					toggle.textContent = child.label || "Dropdown";
+
+					wrap.appendChild(toggle);
+					wrap.appendChild(this.buildDropdownMenu(child.id, depth + 1));
+					menu.appendChild(wrap);
+					return;
+				}
+
+				const childLink = document.createElement("a");
+				childLink.className = this.styleDefaults.dropdownItemClass;
+				childLink.setAttribute("href", child.url || "#");
+				childLink.setAttribute("data-type", child.type === "page" ? "page" : "link");
+				childLink.textContent = child.label || (child.type === "page" ? "Page" : "Link");
+				menu.appendChild(childLink);
+			});
+
+		return menu;
+	},
+
 	escapeHtml: function(text) {
 		return String(text || "")
 			.replace(/&/g, "&amp;")
@@ -1144,6 +1329,125 @@ const stNavbarLinksManager = {
 		return this.escapeHtml(text);
 	}
 };
+
+// "+ Add link" toolbar button - inserts a new editable link next to the current nav selection
+document.getElementById("add-link-btn")?.addEventListener("click", function (event) {
+	event.preventDefault();
+	stAddNavLink();
+	return false;
+});
+
+function stAddNavLink() {
+	let node = Vvveb.Builder.selectedEl;
+	if (!node || !node.closest) {
+		return;
+	}
+
+	// an image selection resolves to its wrapping link, if any
+	if (node.tagName.toLowerCase() === "img") {
+		node = node.closest("a") || node;
+	}
+
+	const navbar = node.classList.contains("navbar") ? node : node.closest(".navbar");
+	if (!navbar) {
+		return;
+	}
+
+	const styles = stNavbarLinksManager.styleDefaults;
+	const cleanClasses = (className, fallback) => {
+		const cleaned = (className || "")
+			.split(" ")
+			.filter((c) => c && c !== "active" && c !== "dropdown" && c !== "dropdown-toggle")
+			.join(" ");
+		return cleaned || fallback;
+	};
+
+	const link = document.createElement("a");
+	link.setAttribute("href", "#");
+	link.setAttribute("data-type", "link");
+	link.textContent = "New link";
+
+	let newEl = link;
+	const isLink = node.tagName.toLowerCase() === "a";
+	const dropdownMenu = isLink ? node.closest(".dropdown-menu") : null;
+
+	if (dropdownMenu) {
+
+		// dropdown item (or submenu toggle) selected - insert after the selection's
+		// direct child of that menu (the .dropdown-submenu wrapper for a submenu toggle)
+		link.className = cleanClasses(node.className, styles.dropdownItemClass);
+
+		let anchor = node;
+		while (anchor.parentElement && anchor.parentElement !== dropdownMenu) {
+			anchor = anchor.parentElement;
+		}
+		anchor.after(link);
+
+	} else if (isLink && node.closest(".navbar-nav")) {
+
+		// top-level link selected - insert a sibling li after its wrapping li
+		const parentLi = (node.parentElement && node.parentElement.matches("li")) ? node.parentElement : null;
+		link.className = cleanClasses(node.className, styles.linkAClass);
+
+		const li = document.createElement("li");
+		li.className = cleanClasses(parentLi ? parentLi.className : "", styles.linkLiClass);
+		li.appendChild(link);
+		newEl = li;
+
+		(parentLi || node).after(li);
+
+	} else {
+
+		// the nav itself (or anything else inside it) - append to the end of the nav list
+		let navList = navbar.querySelector(".navbar-nav");
+		if (!navList) {
+			const collapse = navbar.querySelector(".navbar-collapse, .collapse");
+			if (!collapse) {
+				return;
+			}
+			navList = document.createElement("ul");
+			navList.className = styles.navListClass;
+			collapse.appendChild(navList);
+		}
+
+		const sampleLink = navList.querySelector(":scope > li > a");
+		const sampleLi = navList.querySelector(":scope > li");
+		link.className = cleanClasses(sampleLink ? sampleLink.className : "", styles.linkAClass);
+
+		const li = document.createElement("li");
+		li.className = cleanClasses(sampleLi ? sampleLi.className : "", styles.linkLiClass);
+		li.appendChild(link);
+		newEl = li;
+
+		navList.appendChild(li);
+	}
+
+	// registering the mutation also marks the nav as changed and enables the save button
+	Vvveb.Undo.addMutation({
+		type: 'childList',
+		target: newEl.parentNode,
+		addedNodes: [newEl],
+		nextSibling: newEl.nextSibling
+	});
+
+	Vvveb.Builder.selectNode(link);
+	Vvveb.Builder.loadNodeComponent(link);
+	Vvveb.TreeList.loadComponents();
+	Vvveb.TreeList.selectComponent(link);
+}
+
+// Mark the nav menu as changed whenever an undoable edit (or an undo/redo of one) touches
+// the navbar, so inline nav edits trigger the save-time confirmation like the modal does
+window.addEventListener("vvveb.iframe.loaded", function () {
+	const markNavChanged = (e) => {
+		const target = e.detail && e.detail.target;
+		if (target && target.closest && target.closest(".navbar")) {
+			window.stNavChanged = true;
+		}
+	};
+	Vvveb.Builder.frameBody.addEventListener("vvveb.undo.add", markNavChanged);
+	Vvveb.Builder.frameBody.addEventListener("vvveb.undo.restore", markNavChanged);
+});
 
 function componentInit(component, node) {
 
