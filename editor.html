@@ -207,6 +207,12 @@
 											<div><small>Menus</small></div>
 										</a>
 									</li>
+									<li class="nav-item">
+										<a class="nav-link" id="footers-tab" data-bs-toggle="tab" href="#pages" data-type="footer" role="tab" aria-controls="footers" aria-selected="false" title="Footers">
+											<i class="la la-shoe-prints la-lg"></i>
+											<div><small>Footers</small></div>
+										</a>
+									</li>
 									</ul>
 							</div>
 
@@ -1854,6 +1860,7 @@
 										<option value="blog">Blog</option>
 										<option value="template">Template</option>
 										<option value="menu">Menu</option>
+										<option value="footer">Footer</option>
 									</select>
 								</div>
 							</div>
@@ -2055,13 +2062,30 @@
 						<div class="form-text">Changing the URL will break any existing links to this page.</div>
 					</div>
 					<div class="mb-3">
+						<label for="st-page-details-meta-title" class="form-label">Meta Title</label>
+						<input type="text" class="form-control" id="st-page-details-meta-title" placeholder="Meta title">
+					</div>
+					<div class="mb-3">
+						<label for="st-page-details-meta-description" class="form-label">Meta Description</label>
+						<textarea class="form-control" id="st-page-details-meta-description" rows="3" placeholder="Meta description"></textarea>
+					</div>
+					<div class="mb-3">
 						<label for="st-page-details-menu-select" class="form-label">Navigation Menu</label>
 						<select class="form-select" id="st-page-details-menu-select">
 							<option value="">Loading…</option>
 						</select>
 					</div>
-					<div>
+					<div class="mb-3">
 						<button type="button" class="btn btn-sm btn-outline-secondary" id="st-page-details-set-default">Set selected menu as site default</button>
+					</div>
+					<div class="mb-3">
+						<label for="st-page-details-footer-select" class="form-label">Footer</label>
+						<select class="form-select" id="st-page-details-footer-select">
+							<option value="">Loading…</option>
+						</select>
+					</div>
+					<div>
+						<button type="button" class="btn btn-sm btn-outline-secondary" id="st-page-details-set-default-footer">Set selected footer as site default</button>
 					</div>
 				</div>
 				<div class="modal-footer">

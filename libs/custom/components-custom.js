@@ -1436,17 +1436,26 @@ function stAddNavLink() {
 	Vvveb.TreeList.selectComponent(link);
 }
 
-// Mark the nav menu as changed whenever an undoable edit (or an undo/redo of one) touches
-// the navbar, so inline nav edits trigger the save-time confirmation like the modal does
+// Mark the nav menu / footer as changed whenever an undoable edit (or an undo/redo of one)
+// touches them, so inline edits trigger the save-time confirmation like the modal does. The
+// footer has no fixed class to anchor on (unlike .navbar) - it's identified by the data-id
+// PHP stamps onto its rendered root element (see WebsitePage::addFooterDataId()).
 window.addEventListener("vvveb.iframe.loaded", function () {
-	const markNavChanged = (e) => {
+	const markSharedContentChanged = (e) => {
 		const target = e.detail && e.detail.target;
-		if (target && target.closest && target.closest(".navbar")) {
+
+		if (!target || !target.closest) {
+			return;
+		}
+		if (target.closest(".navbar")) {
 			window.stNavChanged = true;
 		}
+		if (window.stFooterAutoid && target.closest('[data-id="' + window.stFooterAutoid + '"]')) {
+			window.stFooterChanged = true;
+		}
 	};
-	Vvveb.Builder.frameBody.addEventListener("vvveb.undo.add", markNavChanged);
-	Vvveb.Builder.frameBody.addEventListener("vvveb.undo.restore", markNavChanged);
+	Vvveb.Builder.frameBody.addEventListener("vvveb.undo.add", markSharedContentChanged);
+	Vvveb.Builder.frameBody.addEventListener("vvveb.undo.restore", markSharedContentChanged);
 });
 
 function componentInit(component, node) {

@@ -238,6 +238,19 @@ $(document).ready(function () {
 				);
 				$('#new-page-modal form .btn[type="submit"]').html('<i class="la la-check"></i> Create Menu');
 				break;
+			case 'footer':
+				$('#new-page-modal .st-parent-folder-select').closest('.mb-3').hide().val('');
+				$('#new-page-modal input[name="url"]').closest('.row').hide().val('');
+				$('#new-page-modal input[name="template"]').closest('.mb-3').hide().val('');
+				stUpdatePageLinkPreview();
+				changeFieldLabel(
+					$('#new-page-modal input[name="title"]').closest('.row').find('label'),
+					$('#new-page-modal input[name="title"]'),
+					'Footer Name',
+					'Main Footer'
+				);
+				$('#new-page-modal form .btn[type="submit"]').html('<i class="la la-check"></i> Create Footer');
+				break;
 		}
 
 		function changeFieldLabel(label, field, name, placeholder = "") {
@@ -884,6 +897,14 @@ window.stElementHighlightConfig = window.stElementHighlightConfig || {
 			labelTextColor: "#ffffff",
 			labelBgColor: "#515151d3"
 		},
+		{
+			selector: "footer",
+			label: "Footer",
+			color: "rgba(14, 233, 116, 0.2)",
+			borderColor: "#515151",
+			labelTextColor: "#ffffff",
+			labelBgColor: "#515151d3"
+		},
 	],
 	defaultColor: "rgba(249, 115, 22, 0.20)",
 	defaultBorderColor: "#ea580c",
@@ -1469,7 +1490,10 @@ const stPageDetailsModal = {
 	_modal: null,
 	_originalTitle: '',
 	_originalLink: '',
+	_originalMetaTitle: '',
+	_originalMetaDescription: '',
 	_originalMenuAutoid: '',
+	_originalFooterAutoid: '',
 	_linkUnlocked: false,
 
 	getModal: function() {
@@ -1483,7 +1507,7 @@ const stPageDetailsModal = {
 	},
 
 	open: function(pageAutoid) {
-		if (!pageAutoid || pageAutoid.indexOf('menu_') === 0) {
+		if (!pageAutoid || pageAutoid.indexOf('menu_') === 0 || pageAutoid.indexOf('footer_') === 0) {
 			return;
 		}
 
@@ -1507,7 +1531,10 @@ const stPageDetailsModal = {
 
 		// Reset fields to loading state
 		const nameInput = document.getElementById('st-page-details-name');
+		const metaTitleInput = document.getElementById('st-page-details-meta-title');
+		const metaDescriptionInput = document.getElementById('st-page-details-meta-description');
 		const menuSelect = document.getElementById('st-page-details-menu-select');
+		const footerSelect = document.getElementById('st-page-details-footer-select');
 		if (nameInput) {
 			nameInput.value = '';
 			nameInput.placeholder = 'Loading…';
@@ -1515,9 +1542,21 @@ const stPageDetailsModal = {
 		if (linkInput) {
 			linkInput.value = '';
 		}
+		if (metaTitleInput) {
+			metaTitleInput.value = '';
+			metaTitleInput.placeholder = 'Loading…';
+		}
+		if (metaDescriptionInput) {
+			metaDescriptionInput.value = '';
+			metaDescriptionInput.placeholder = 'Loading…';
+		}
 		if (menuSelect) {
 			menuSelect.innerHTML = '<option value="">Loading…</option>';
 			menuSelect.disabled = true;
+		}
+		if (footerSelect) {
+			footerSelect.innerHTML = '<option value="">Loading…</option>';
+			footerSelect.disabled = true;
 		}
 
 		modal.show();
@@ -1529,7 +1568,10 @@ const stPageDetailsModal = {
 
 			const nameInput = document.getElementById('st-page-details-name');
 			const linkInput = document.getElementById('st-page-details-link');
+			const metaTitleInput = document.getElementById('st-page-details-meta-title');
+			const metaDescriptionInput = document.getElementById('st-page-details-meta-description');
 			const menuSelect = document.getElementById('st-page-details-menu-select');
+			const footerSelect = document.getElementById('st-page-details-footer-select');
 
 			if (nameInput) {
 				nameInput.value = response.title || '';
@@ -1539,6 +1581,16 @@ const stPageDetailsModal = {
 			if (linkInput) {
 				linkInput.value = response.link || '';
 				stPageDetailsModal._originalLink = response.link || '';
+			}
+			if (metaTitleInput) {
+				metaTitleInput.value = response.meta_title || '';
+				metaTitleInput.placeholder = 'Meta title';
+				stPageDetailsModal._originalMetaTitle = response.meta_title || '';
+			}
+			if (metaDescriptionInput) {
+				metaDescriptionInput.value = response.meta_description || '';
+				metaDescriptionInput.placeholder = 'Meta description';
+				stPageDetailsModal._originalMetaDescription = response.meta_description || '';
 			}
 
 			if (menuSelect) {
@@ -1555,6 +1607,21 @@ const stPageDetailsModal = {
 				});
 				menuSelect.innerHTML = html;
 			}
+
+			if (footerSelect) {
+				footerSelect.disabled = false;
+				const footers = response.footers || [];
+				const linkedFooterAutoid = response.linked_footer_autoid || '';
+				stPageDetailsModal._originalFooterAutoid = linkedFooterAutoid;
+
+				let footerHtml = '<option value="">— No linked footer —</option>';
+				footers.forEach(function(footer) {
+					const isSelected = footer.autoid === linkedFooterAutoid ? ' selected' : '';
+					const defaultLabel = footer['default'] ? ' (default)' : '';
+					footerHtml += `<option value="${footer.autoid}"${isSelected}>${footer.name}${defaultLabel}</option>`;
+				});
+				footerSelect.innerHTML = footerHtml;
+			}
 		});
 	},
 
@@ -1563,27 +1630,40 @@ const stPageDetailsModal = {
 			return;
 		}
 
-		const nameInput  = document.getElementById('st-page-details-name');
-		const linkInput  = document.getElementById('st-page-details-link');
-		const menuSelect = document.getElementById('st-page-details-menu-select');
+		const nameInput            = document.getElementById('st-page-details-name');
+		const linkInput            = document.getElementById('st-page-details-link');
+		const metaTitleInput       = document.getElementById('st-page-details-meta-title');
+		const metaDescriptionInput = document.getElementById('st-page-details-meta-description');
+		const menuSelect           = document.getElementById('st-page-details-menu-select');
+		const footerSelect         = document.getElementById('st-page-details-footer-select');
 
-		const title       = nameInput ? nameInput.value.trim() : '';
-		const link        = (linkInput && this._linkUnlocked) ? linkInput.value.trim() : '';
-		const menuAutoid  = menuSelect ? menuSelect.value : '';
+		const title           = nameInput ? nameInput.value.trim() : '';
+		const link            = (linkInput && this._linkUnlocked) ? linkInput.value.trim() : '';
+		const metaTitle       = metaTitleInput ? metaTitleInput.value.trim() : '';
+		const metaDescription = metaDescriptionInput ? metaDescriptionInput.value.trim() : '';
+		const menuAutoid      = menuSelect ? menuSelect.value : '';
+		const footerAutoid    = footerSelect ? footerSelect.value : '';
 
 		if (!title) {
 			displayToast('bg-warning', 'Warning', 'Page title cannot be empty.');
 			return;
 		}
 
-		const titleChanged = title !== this._originalTitle;
-		const linkChanged  = link !== '' && link !== this._originalLink;
-		const menuChanged  = menuAutoid !== this._originalMenuAutoid;
+		const titleChanged  = title !== this._originalTitle;
+		const linkChanged   = link !== '' && link !== this._originalLink;
+		const metaChanged   = metaTitle !== this._originalMetaTitle || metaDescription !== this._originalMetaDescription;
+		const menuChanged   = menuAutoid !== this._originalMenuAutoid;
+		const footerChanged = footerAutoid !== this._originalFooterAutoid;
 
 		const tasks = [];
 
-		if (titleChanged || linkChanged) {
-			const renameData = { page_autoid: stCurrentPageAutoid, title: title };
+		if (titleChanged || linkChanged || metaChanged) {
+			const renameData = {
+				page_autoid: stCurrentPageAutoid,
+				title: title,
+				meta_title: metaTitle,
+				meta_description: metaDescription
+			};
 			if (linkChanged) {
 				renameData.link = link;
 			}
@@ -1606,6 +1686,12 @@ const stPageDetailsModal = {
 		if (menuChanged) {
 			tasks.push(
 				stAjaxCall('linkPageMenu', { page_autoid: stCurrentPageAutoid, menu_autoid: menuAutoid }, 'POST')
+			);
+		}
+
+		if (footerChanged) {
+			tasks.push(
+				stAjaxCall('linkPageFooter', { page_autoid: stCurrentPageAutoid, footer_autoid: footerAutoid }, 'POST')
 			);
 		}
 
@@ -1680,6 +1766,42 @@ const stPageDetailsModal = {
 			});
 		}
 
+		const defaultFooterBtn = document.getElementById('st-page-details-set-default-footer');
+		if (defaultFooterBtn) {
+			defaultFooterBtn.addEventListener('click', function() {
+				const footerSelect = document.getElementById('st-page-details-footer-select');
+				const footerAutoid = footerSelect ? footerSelect.value : '';
+				if (!footerAutoid) {
+					displayToast('bg-warning', 'Warning', 'Please select a footer to set as default.');
+					return;
+				}
+				stAjaxCall('setDefaultFooter', { footer_autoid: footerAutoid }, 'POST').then(function(response) {
+					if (response && response.success) {
+						displayToast('bg-success', 'Success', 'Default footer set.');
+						// Refresh footer list to show updated default labels
+						stAjaxCall('getPageDetails', { page_autoid: stCurrentPageAutoid }, 'GET').then(function(resp) {
+							if (!resp) {
+								return;
+							}
+							const footerSelect = document.getElementById('st-page-details-footer-select');
+							if (!footerSelect) {
+								return;
+							}
+							const currentValue = footerSelect.value;
+							const footers = resp.footers || [];
+							let html = '<option value="">— No linked footer —</option>';
+							footers.forEach(function(footer) {
+								const isSelected = footer.autoid === currentValue ? ' selected' : '';
+								const defaultLabel = footer['default'] ? ' (default)' : '';
+								html += `<option value="${footer.autoid}"${isSelected}>${footer.name}${defaultLabel}</option>`;
+							});
+							footerSelect.innerHTML = html;
+						});
+					}
+				});
+			});
+		}
+
 		// Toolbar button
 		const toolbarBtn = document.getElementById('st-page-details-btn');
 		if (toolbarBtn) {
@@ -1721,7 +1843,10 @@ window.addEventListener('vvveb.FileManager.loadPage', function(e) {
 
 	const btn = document.getElementById('st-page-details-btn');
 	if (btn) {
-		if (stCurrentPageAutoid && stCurrentPageAutoid.indexOf('menu_') !== 0) {
+		if (stCurrentPageAutoid
+			&& stCurrentPageAutoid.indexOf('menu_') !== 0
+			&& stCurrentPageAutoid.indexOf('footer_') !== 0
+		) {
 			btn.classList.remove('d-none');
 		} else {
 			btn.classList.add('d-none');
@@ -1780,6 +1905,75 @@ function stNavSaveConfirm(menuName) {
 		var resolved = false;
 
 		modal.querySelector('#st-nav-confirm-ok').addEventListener('click', function() {
+			resolved = true; // must be set before hide() — Bootstrap fires hide.bs.modal synchronously
+			bsModal.hide();
+			resolve(true);
+		});
+
+		// any modal close that wasn't the OK button means the user cancelled
+		modal.addEventListener('hide.bs.modal', function() {
+			if (!resolved) {
+				resolve(false);
+			}
+		});
+
+		modal.addEventListener('hidden.bs.modal', function() {
+			modal.remove();
+		});
+
+		bsModal.show();
+	});
+}
+
+/**
+ * stFooterSaveConfirm: Shows a Bootstrap 5 confirmation modal before saving footer changes.
+ * Returns a Promise that resolves to true (proceed) or false (cancel).
+ *
+ * @param {string} footerName - The name of the footer being changed.
+ * @returns {Promise<boolean>}
+ */
+function stFooterSaveConfirm(footerName) {
+	return new Promise(function(resolve) {
+		var modalId = 'st-footer-save-confirm-modal';
+		var existing = document.getElementById(modalId);
+		if (existing) {
+			existing.remove();
+		}
+
+		var modal = document.createElement('div');
+		modal.id = modalId;
+		modal.className = 'modal fade';
+		modal.setAttribute('tabindex', '-1');
+		modal.setAttribute('aria-modal', 'true');
+		modal.setAttribute('role', 'dialog');
+		modal.innerHTML = [
+			'<div class="modal-dialog modal-dialog-centered">',
+				'<div class="modal-content">',
+					'<div class="modal-header">',
+						'<h5 class="modal-title"><i class="la la-globe me-1"></i> Footer Changes</h5>',
+						'<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>',
+					'</div>',
+					'<div class="modal-body">',
+						'<p>You have made changes to the <strong class="st-footer-name"></strong> footer.</p>',
+						'<p class="text-muted mb-0">These changes will be saved and applied to <strong>all pages</strong> using this footer. Do you want to continue?</p>',
+					'</div>',
+					'<div class="modal-footer">',
+						'<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>',
+						'<button type="button" class="btn btn-primary" id="st-footer-confirm-ok"><i class="la la-save me-1"></i> Save with Footer</button>',
+					'</div>',
+				'</div>',
+			'</div>'
+		].join('');
+
+		// set footer name safely (no XSS)
+		modal.querySelector('.st-footer-name').textContent = footerName;
+
+		document.body.appendChild(modal);
+
+		var bsModal = new bootstrap.Modal(modal, { backdrop: 'static', keyboard: false });
+		var resolved = false;
+
+		modal.querySelector('#st-footer-confirm-ok').addEventListener('click', function() {
 			resolved = true; // must be set before hide() — Bootstrap fires hide.bs.modal synchronously
 			bsModal.hide();
 			resolve(true);

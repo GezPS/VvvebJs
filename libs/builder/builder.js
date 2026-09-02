@@ -1169,6 +1169,9 @@ Vvveb.Builder = {
 			stAjaxCall(action, data, 'POST').then(async (response) => {
 				window.stNavMenuName = (response && response.nav_menu_name) ? response.nav_menu_name : '';
 				window.stNavChanged  = false;
+				window.stFooterAutoid = (response && response.footer_autoid) ? response.footer_autoid : '';
+				window.stFooterName   = (response && response.footer_name) ? response.footer_name : '';
+				window.stFooterChanged = false;
 				if(response && response.html) {
 					let html = response.html;
 					if (html) {
@@ -2625,6 +2628,14 @@ Vvveb.Builder = {
 				}
 			}
 
+			// if the footer has changed, ask the user to confirm before proceeding
+			if (window.stFooterChanged && window.stFooterName && typeof stFooterSaveConfirm === 'function') {
+				const footerConfirmed = await stFooterSaveConfirm(window.stFooterName);
+				if (!footerConfirmed) {
+					return;
+				}
+			}
+
 			stAjaxCall(action, data, 'POST', true).then(async (response) => {
 
 				// check the response for a new id
@@ -2656,6 +2667,7 @@ Vvveb.Builder = {
 						Vvveb.FileManager.reloadCurrentPage();
 						document.querySelectorAll("#top-panel .save-btn").forEach(e => e.setAttribute("disabled", "true"));
 						window.stNavChanged = false;
+						window.stFooterChanged = false;
 					})
 					.catch((err) => {
 						if (error) error(err);
